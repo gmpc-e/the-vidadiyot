@@ -1,11 +1,19 @@
 """Interactables: things the player triggers with the interact key.
 
-M3 has Door. FusePanel, PAConsole, and MainGate follow in later milestones and
-plug into the same "nearest interactable within range -> interact()" flow.
+Door gates a classroom; Locker is the delivery point inside it. Both are rects
+with a room color, resolved by the same "nearest interactable within range ->
+interact()" flow in PlayState.
 """
 import pygame
 
 from game.world.palette import color_rgb
+
+
+def rect_dist(rect, point):
+    """Distance from `point` to the nearest edge of `rect` (0 if inside)."""
+    cx = max(rect.left, min(point[0], rect.right))
+    cy = max(rect.top, min(point[1], rect.bottom))
+    return pygame.Vector2(cx, cy).distance_to(point)
 
 
 class Door:
@@ -32,10 +40,7 @@ class Door:
         return False
 
     def dist_to(self, point):
-        """Distance from `point` to the nearest edge of the door (0 if inside)."""
-        cx = max(self.rect.left, min(point[0], self.rect.right))
-        cy = max(self.rect.top, min(point[1], self.rect.bottom))
-        return pygame.Vector2(cx, cy).distance_to(point)
+        return rect_dist(self.rect, point)
 
     def draw(self, surface, camera):
         r = self.rect.move(-round(camera.offset.x), -round(camera.offset.y))
@@ -70,3 +75,62 @@ class Door:
         leaf = pygame.Rect(r.left, r.top, 5, r.height)
         pygame.draw.rect(surface, (78, 56, 38), leaf)
         pygame.draw.rect(surface, rgb, r, 2)
+
+
+class Locker:
+    """The book's home — a classroom's delivery point (§5).
+
+    Mirrors Door: a rect, the room's id and color, `dist_to`, `draw`. Two things
+    it deliberately does *not* do:
+
+    * **It never blocks.** Same reason nothing in `world/decor.py` is solid — a
+      monster's hitbox is 44x44, and a 22px box standing 10px off the wall would
+      leave a pocket the room's guardian could wedge itself into.
+    * **It never gates itself.** Whether the book may go in is PlayState's call
+      (right color, room cleared); the locker only records that it happened, so
+      the closed/filled art is the one thing it owns.
+
+    It claims the top slot of the painted locker bank (`decor.LOCKER_BANK`), so
+    the objective and the scenery read as one run of lockers instead of a prop
+    parked next to a prop.
+    """
+    def __init__(self, rect, room_id, color):
+        self.rect = pygame.Rect(rect)
+        self.room_id = room_id
+        self.color = color
+        self.filled = False           # its book is home; the door hangs open
+
+    def dist_to(self, point):
+        return rect_dist(self.rect, point)
+
+    def draw(self, surface, camera):
+        r = self.rect.move(-round(camera.offset.x), -round(camera.offset.y))
+        rgb = color_rgb(self.color)
+        pygame.draw.rect(surface, (96, 99, 110), r)
+        pygame.draw.rect(surface, (38, 40, 48), r, 1)
+        # the colored plate: the room's color, readable from across the room
+        plate = pygame.Rect(0, 0, r.width - 8, 6)
+        plate.midtop = (r.centerx, r.top + 4)
+        pygame.draw.rect(surface, rgb, plate)
+        pygame.draw.rect(surface, (20, 20, 26), plate, 1)
+        if self.filled:
+            self._draw_open(surface, r, rgb)
+        else:
+            self._draw_shut(surface, r)
+
+    def _draw_shut(self, surface, r):
+        for i in range(3):            # vent slits
+            y = r.top + 14 + i * 3
+            pygame.draw.line(surface, (62, 64, 74), (r.left + 5, y), (r.right - 6, y), 1)
+        pygame.draw.rect(surface, (188, 186, 176), (r.right - 6, r.centery + 2, 2, 6))
+
+    def _draw_open(self, surface, r, rgb):
+        """Door swung aside with the returned book on the shelf, lit by its color."""
+        inner = pygame.Rect(r.left + 5, r.top + 12, r.width - 7, r.height - 15)
+        pygame.draw.rect(surface, (26, 26, 32), inner)
+        pygame.draw.rect(surface, (140, 142, 152), (r.left, r.top + 12, 4, r.height - 14))
+        book = pygame.Rect(inner.left + 3, inner.centery - 4, inner.width - 7, 9)
+        pygame.draw.rect(surface, rgb, book)
+        pygame.draw.rect(surface, (16, 14, 18), book, 1)
+        pygame.draw.line(surface, (245, 240, 225),
+                         (book.left + 2, book.top + 2), (book.right - 3, book.top + 2), 1)

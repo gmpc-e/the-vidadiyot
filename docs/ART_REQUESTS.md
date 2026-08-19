@@ -1,7 +1,8 @@
 # Art requests — the school map
 
 What to paint, in priority order. Everything here is for the *map*; characters
-and menu art are already done.
+and menu art are already done — as **single poses**. The frames that would make
+them move are a separate request: see `ART_PROMPTS_PHASE2.md`.
 
 ---
 

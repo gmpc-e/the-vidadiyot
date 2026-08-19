@@ -143,6 +143,24 @@ cutting and edge-blending when the slabs arrive.
 - Internal res is 640×360 integer-scaled (already crisp). Biggest single win is
   matching the tiles' fidelity to the monster sprites.
 
+**✅ Art requests are written and split into two phases** (2026-08-19).
+`docs/ART_PROMPTS.md` is **Phase 1 — the map**: floor/wall material swatches,
+damage decals, doors, item icons. `docs/ART_PROMPTS_PHASE2.md` is
+**Phase 2 — animation**, and it exists because nothing in the game actually
+animates: each warrior has four *single* poses and the walk cycle is a code fake
+(a two-step bob plus a 4% squash, `entities/player.py`), monsters are one frame
+on a sine bob, and every projectile and effect is drawn with primitives.
+- The highest-value sheet in Phase 2 is **the caster wind-up** (Little Terror /
+  Little Snir). It is not decoration: a fireball currently appears with no tell,
+  so a ranged fight has no readable moment to dodge. Frames hooked to the
+  existing cast timer turn that into a fair fight.
+- ⚠️ **Art is the larger half but not the only half.** `Player.set_frames()`
+  takes exactly four Surfaces, `Monster.draw()` has no animation clock at all,
+  and `spritelib` cannot slice a strip. A frame-list animator and a strip slicer
+  land with the first sheet, not after it.
+- ⬜ Both packs are waiting on art coming back. Nothing else in §1 moves until
+  then.
+
 ## 2. ⬜ Add more monsters
 Currently 2 ranged casters. Add variety in *behavior*, not just stats.
 
