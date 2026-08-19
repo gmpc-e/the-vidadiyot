@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="50" height="34" tilewidth="32" tileheight="32" infinite="0" nextlayerid="3" nextobjectid="26">
+ <tileset firstgid="1" name="school" tilewidth="32" tileheight="32" tilecount="4" columns="4">
+  <image source="../tilesets/school.png" width="128" height="32"/>
+  <tile id="1">
+   <properties>
+    <property name="solid" type="bool" value="true"/>
+   </properties>
+  </tile>
+ </tileset>
+ <layer id="1" name="ground" width="50" height="34">
+  <data encoding="csv">
+2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,
+2,2,2,2,2,2,2,2,2,4,4,2,2,2,2,2,2,2,2,2,2,2,2,2,2,4,4,2,2,2,2,2,2,2,2,2,2,2,2,2,2,4,4,2,2,2,2,2,2,2,
+2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,
+2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,
+2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,
+2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,
+2,2,2,2,2,2,2,4,4,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
+</data>
+ </layer>
+ <objectgroup id="2" name="meta">
+  <object id="1" name="player_start" type="spawn" x="800" y="800"/>
+  <object id="2" name="classroom_a" type="room" x="96" y="64" width="416" height="384">
+   <properties><property name="room_type" value="classroom"/><property name="color" value="red"/></properties>
+  </object>
+  <object id="3" name="classroom_b" type="room" x="608" y="64" width="416" height="384">
+   <properties><property name="room_type" value="classroom"/><property name="color" value="blue"/></properties>
+  </object>
+  <object id="4" name="classroom_c" type="room" x="1120" y="64" width="416" height="384">
+   <properties><property name="room_type" value="classroom"/><property name="color" value="green"/></properties>
+  </object>
+  <object id="5" name="entrance" type="room" x="672" y="608" width="288" height="416">
+   <properties><property name="room_type" value="entrance"/></properties>
+  </object>
+  <object id="6" name="electrical" type="room" x="96" y="640" width="352" height="352">
+   <properties><property name="room_type" value="utility"/></properties>
+  </object>
+  <object id="7" name="corridor" type="room" x="64" y="480" width="1472" height="128">
+   <properties><property name="room_type" value="corridor"/></properties>
+  </object>
+  <object id="8" name="door_classroom_a" type="door" x="288" y="448" width="64" height="32">
+   <properties><property name="room_id" value="classroom_a"/><property name="color" value="red"/></properties>
+  </object>
+  <object id="9" name="door_classroom_b" type="door" x="800" y="448" width="64" height="32">
+   <properties><property name="room_id" value="classroom_b"/><property name="color" value="blue"/></properties>
+  </object>
+  <object id="10" name="door_classroom_c" type="door" x="1312" y="448" width="64" height="32">
+   <properties><property name="room_id" value="classroom_c"/><property name="color" value="green"/></properties>
+  </object>
+  <object id="11" name="spawn_key" type="spawn" x="176" y="560">
+   <point/>
+   <properties><property name="item" value="key"/></properties>
+  </object>
+  <object id="12" name="spawn_key" type="spawn" x="1456" y="560">
+   <point/>
+   <properties><property name="item" value="key"/></properties>
+  </object>
+  <object id="13" name="spawn_key" type="spawn" x="816" y="944">
+   <point/>
+   <properties><property name="item" value="key"/></properties>
+  </object>
+  <object id="14" name="spawn_book" type="spawn" x="976" y="560">
+   <point/>
+   <properties><property name="item" value="book"/><property name="variant" value="red"/></properties>
+  </object>
+  <object id="15" name="spawn_book" type="spawn" x="336" y="560">
+   <point/>
+   <properties><property name="item" value="book"/><property name="variant" value="blue"/></properties>
+  </object>
+  <object id="16" name="spawn_book" type="spawn" x="816" y="720">
+   <point/>
+   <properties><property name="item" value="book"/><property name="variant" value="green"/></properties>
+  </object>
+  <object id="17" name="spawn_health" type="spawn" x="656" y="528">
+   <point/>
+   <properties><property name="item" value="health"/></properties>
+  </object>
+  <object id="18" name="spawn_health" type="spawn" x="1232" y="560">
+   <point/>
+   <properties><property name="item" value="health"/></properties>
+  </object>
+  <object id="19" name="spawn_health" type="spawn" x="272" y="816">
+   <point/>
+   <properties><property name="item" value="health"/></properties>
+  </object>
+  <object id="20" name="monster_blue" type="monster" x="432" y="560">
+   <point/>
+   <properties><property name="guards" value="blue"/><property name="kind" value="webber"/><property name="hits" type="int" value="5"/></properties>
+  </object>
+  <object id="21" name="monster_red" type="monster" x="1072" y="560">
+   <point/>
+   <properties><property name="guards" value="red"/><property name="kind" value="caster"/><property name="hits" type="int" value="5"/></properties>
+  </object>
+  <object id="22" name="monster_green" type="monster" x="816" y="848">
+   <point/>
+   <properties><property name="guards" value="green"/><property name="kind" value="webber"/><property name="hits" type="int" value="5"/></properties>
+  </object>
+  <object id="23" name="monster_caster" type="monster" x="304" y="240">
+   <point/>
+   <properties><property name="kind" value="caster"/><property name="hits" type="int" value="5"/></properties>
+  </object>
+  <object id="24" name="monster_caster" type="monster" x="816" y="240">
+   <point/>
+   <properties><property name="kind" value="caster"/><property name="hits" type="int" value="5"/></properties>
+  </object>
+  <object id="25" name="monster_caster" type="monster" x="1328" y="240">
+   <point/>
+   <properties><property name="kind" value="caster"/><property name="hits" type="int" value="5"/></properties>
+  </object>
+ </objectgroup>
+</map>

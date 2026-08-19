@@ -1,0 +1,32 @@
+# ─── Python ───────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ─── Virtualenv ───────────────────────────────────────────────────────────
+# Recreate with:  python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
+venv/
+.venv/
+
+# ─── PyInstaller build output ─────────────────────────────────────────────
+# `tools/build_mac.sh` regenerates both; together they are ~60MB of binaries
+# that would dwarf the ~1.4MB of actual source in this repo.
+build/
+dist/
+
+# ─── IDE ──────────────────────────────────────────────────────────────────
+# Carries absolute interpreter paths, so it is per-machine, not per-project.
+.idea/
+.vscode/
+
+# ─── macOS ────────────────────────────────────────────────────────────────
+.DS_Store
+
+# ─── Local agent state ────────────────────────────────────────────────────
+.claude/
+
+# ─── Generated at runtime ─────────────────────────────────────────────────
+# The leaderboard lives in the user's Application Support dir, not here, but
+# older builds wrote it locally.
+data/scores.json

@@ -1,0 +1,18 @@
+{
+  "find_keys": {
+    "title_en": "Find the classroom keys",
+    "title_he": "מצאו את מפתחות הכיתות",
+    "type": "collect",
+    "item": "key",
+    "required": 3,
+    "unlocked_by": null
+  },
+  "return_books": {
+    "title_en": "Return each book to its classroom",
+    "title_he": "החזירו כל ספר לכיתה שלו",
+    "type": "deliver",
+    "item": "book",
+    "required": 3,
+    "unlocked_by": null
+  }
+}
