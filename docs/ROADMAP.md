@@ -1,16 +1,33 @@
-# Roadmap — The Vidadiyot (knight vs. monsters)
+# Roadmap — The Vidadiyot
 
 Living doc for planned work. Spirit: **fun sandbox** — pick what's fun, no
-obligation to finish everything. Current state: playable combat slice with a
-title menu, one school map, two ranged monsters (Little Snir = web, Little
-Terror = fire), knight with a sword (Space), keys→doors→books loop, potions,
-timer, victory + leaderboard, defeat, difficulty (Easy/Normal/Hard = damage).
+obligation to finish everything.
+
+**Where it lives:** `~/github/the-vidadiyot` → https://github.com/gmpc-e/the-vidadiyot
+(`main`). The user pushes with **GitHub Desktop** and plans to branch later, so
+leave committing to them unless asked. `venv/ build/ dist/ .idea/` are
+gitignored — ~1.5MB of source against ~117MB of ignored build output.
+
+**Current state:** a playable level with a painted title screen and warrior
+select; two playable warriors (Elad — longsword; Roni — thrown knives + Zina);
+three ranged monsters designed, two of them live (Little Snir = web, Little
+Terror = fire) with Emri built but parked for the boss level; furnished
+classrooms; keys→doors→books loop over three guarded books; potions, timer,
+level-complete sequence, victory + leaderboard, defeat; difficulty scales monster
+damage. 330 headless tests.
+
+**The one thing holding the look back:** the map is still four flat-colour
+rectangles. See §1 and `docs/ART_REQUESTS.md` / `docs/ART_PROMPTS.md`.
 
 Status legend: ⬜ not started · 🔶 in progress · ✅ done · 🌟 stretch goal
 
-Rough order: **§1–§2 make it feel good, §3–§4 make it bigger, §5–§6 tighten the
+Rough order: **§1–§2 make it feel good, §3–§4 make it bigger, §5 tightens the
 core loop.** §10 (multiplayer) is a *stretch goal* — not until the game is crisp
 and there's more of it. Plenty to do first.
+
+**Next up, in order:** (1) map tiles — §1, blocked only on art; (2) §5 lockers,
+which gives the book-return burst a real destination; (3) §9 the Emri boss duel,
+whose behaviour is already written and tested.
 
 **Level 1 pacing (2026-08-19):** a run was finishing in ~60s. Three books now
 instead of two, **every** book guarded (6 monsters, up from 5 with one book free),
@@ -148,8 +165,9 @@ Currently 2 ranged casters. Add variety in *behavior*, not just stats.
 vanish**. It never walks: it waits out of the world entirely (invisible,
 untargetable, unhittable), materializes one arm's length from you at a random
 angle, charges for `EMRI_TELEGRAPH`, throws a `LightBolt`, and dissolves.
-- It wakes on the **first book returned** (`EMRI_SPAWN_AFTER_BOOKS`), so it is
-  the thing standing between you and the *next* book, with an arrival banner.
+- It used to wake on the first book returned; that spawn is gone, along with
+  `EMRI_SPAWN_AFTER_BOOKS`. `PlayState.wake_emri()` is now the only way in, and
+  nothing in level 1 calls it — §9's boss duel is its intended caller.
 - ⚠️ **`EMRI_TELEGRAPH` is the difficulty dial, not `EMRI_HITS`.** The telegraph
   is the only window in which the boss can be hit at all, so shortening it makes
   the fight harder in a way that raising its HP never will — raising HP just
