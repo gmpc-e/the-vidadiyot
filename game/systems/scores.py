@@ -1,7 +1,15 @@
 """Persistent leaderboard — top players by completion time (fastest first).
 
-Stored as JSON in data/scores.json. Names are unique (case-insensitive): a name
-already on the board is rejected, so each player appears once.
+Stored as JSON in data/scores.json. Names are unique (case-insensitive) and each
+player appears once — but a returning player **keeps their best run**, rather
+than being turned away.
+
+That last part was a fix, not the original design. Rejecting a known name meant
+a player who beat their own time had no way to record it, so the real board
+filled up with "Elad", "Eladi" — the same person working around the block one
+character at a time. Letting a better time replace a worse one removes the
+reason to do that, and is what "one entry per player" was trying to achieve
+anyway.
 """
 import json
 import os
@@ -45,16 +53,43 @@ def name_taken(name):
     return any(e["name"].strip().lower() == key for e in load())
 
 
+ADDED, IMPROVED, SLOWER, INVALID = "added", "improved", "slower", "invalid"
+
+
 def add(name, seconds):
-    """Add a result. Returns True if saved, False if the name already exists."""
+    """Record a run. Returns one of ADDED / IMPROVED / SLOWER / INVALID.
+
+    Callers want to *say* which happened — "new best!" and "your record stands"
+    are different messages — so this reports the outcome rather than a bare bool.
+    """
     name = name.strip()
-    if not name or name_taken(name):
-        return False
+    if not name:
+        return INVALID
+    seconds = round(float(seconds), 2)
     entries = load()
-    entries.append({"name": name, "time": round(float(seconds), 2)})
+    key = name.lower()
+    for entry in entries:
+        if entry["name"].strip().lower() == key:
+            if seconds >= entry["time"]:
+                return SLOWER
+            entry["time"] = seconds
+            entry["name"] = name          # keep the spelling they just typed
+            entries.sort(key=lambda e: e["time"])
+            _save(entries)
+            return IMPROVED
+    entries.append({"name": name, "time": seconds})
     entries.sort(key=lambda e: e["time"])
     _save(entries)
-    return True
+    return ADDED
+
+
+def best_time(name):
+    """The stored time for `name`, or None."""
+    key = name.strip().lower()
+    for e in load():
+        if e["name"].strip().lower() == key:
+            return e["time"]
+    return None
 
 
 def top(n=8):

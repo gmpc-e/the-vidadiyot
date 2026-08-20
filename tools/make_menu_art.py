@@ -23,7 +23,7 @@ MENU_H = 104
 
 # name -> (source, crop, mode, luma cut, brightness gamma, feather)
 FIGURES = {
-    "elad_menu":   ("elad-the-knight.png", (615, 62, 215, 300),
+    "wallad_menu":   ("elad-the-knight.png", (615, 62, 215, 300),
                     MODE_FILL, 16, 1.7, 0),
     "roni_menu":   ("roni-the-warrior-princess.png", (1092, 80, 62, 90),
                     MODE_FILL, 20, 1.35, 0),

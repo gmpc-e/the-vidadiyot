@@ -40,36 +40,69 @@ class Player(Entity):
         self.health = self.max_health
         self._dmg_delay = 0.0       # time left before health regens
         self.hurt_flash = 0.0       # brief flash timer when damaged
+        self.sound_request = None   # a noise for PlayState to play, once
+        # Difficulty's `regen` dial. 1.0 unless PlayState says otherwise, so a
+        # Player built outside a run (tests, the select screen) heals normally.
+        self.regen = 1.0
         self.facing = 1             # 1 = right, -1 = left (for sprite flip)
+        # Which painted view to use: "down" (toward the camera), "up" (away) or
+        # "side". ⚠️ **A back view cannot be mirrored out of a front view**, so
+        # this only does anything for a warrior whose sheet carries the extra
+        # rows; everyone else falls back to plain "walk" and looks exactly as
+        # they did before.
+        self.facing_dir = "down"
         self._walk_t = 0.0          # animation clock
         self._moving = False
         self.swing = 0.0            # sword-swing effect timer
         self.webbed = False         # caught in Little Snir's web?
         self.struggle = 0           # Space presses left to break free
-        self.frames = {}            # state name -> Surface
 
     # ── animation ────────────────────────────────────────────────────────--
-    def set_frames(self, idle, walk, attack, hurt):
-        """Install the warrior's four poses and pre-build the walk squash."""
-        self.frames = {"idle": idle, "walk": walk, "attack": attack, "hurt": hurt}
-        self.sprite = idle          # Entity.draw fallback
-        squash = pygame.transform.smoothscale(
-            walk, (walk.get_width(), max(1, int(walk.get_height() * 0.94))))
-        self._walk_cycle = (walk, squash)
-
+    # The machinery is on `Entity` and shared with the monsters; a warrior only
+    # has to say which pose wins. Hurt beats attack beats walk beats idle: being
+    # hit mid-swing should read as being hit.
     @property
     def anim_state(self):
+        # ⚠️ Being webbed outranks being hit. The web now drains health every
+        # frame it holds you (§5), so `hurt_flash` is almost always up while
+        # caught — and a flinch pose on top of a trapped one reads as neither.
+        if self.webbed and "webbed" in self.frames:
+            return "webbed"
         if self.hurt_flash > 0:
             return "hurt"
         if self.swing > 0:
             return "attack"
-        return "walk" if self._moving else "idle"
+        stem = "walk" if self._moving else "idle"
+        directional = f"{stem}_{self.facing_dir}"
+        return directional if directional in self.frames else stem
 
     def _current_frame(self):
         state = self.anim_state
-        if state == "walk" and getattr(self, "_walk_cycle", None):
-            return self._walk_cycle[int(self._walk_t * 7) % 2]
-        return self.frames.get(state) or self.sprite
+        if state == "webbed":
+            # More struggle left means more silk: the strip runs from barely
+            # caught to fully wrapped, so it is played *backwards* as the player
+            # mashes free. Progress is the escape, not a clock.
+            span = max(1, settings.WEB_STRUGGLE_HITS - 1)
+            caught = (self.struggle - 1) / span
+            return self.frame_for(state, 0.0, progress=min(1.0, max(0.0, caught)))
+        return self.frame_for(state, self._walk_t)
+
+    def _mirrors(self):
+        """Should the sprite be flipped for leftward movement?
+
+        ⚠️ Only views that are *sideways* may mirror. Flipping a front or back
+        view swaps the sword into the wrong hand and the shield with it, for no
+        gain — the character is symmetrical about the camera in those
+        directions. Plain "idle" counts as a front view **once a character has
+        directional art**; for one that has none it is the only pose there is,
+        and mirroring it is the behaviour every warrior had before.
+        """
+        if self.facing >= 0:
+            return False
+        state = self.anim_state
+        if state.endswith(("_up", "_down")) or state == "webbed":
+            return False
+        return not (state == "idle" and "walk_side" in self.frames)
 
     @property
     def alive(self):
@@ -79,6 +112,21 @@ class Player(Entity):
         self.health = max(0.0, self.health - amount)
         self._dmg_delay = settings.PLAYER_REGEN_DELAY
         self.hurt_flash = 0.3       # long enough for the hurt pose to register
+        # Asked for, not played: the player has no reference to the audio
+        # system, and every damage source would otherwise have to remember to
+        # make a noise. PlayState drains this — see `_drain_sounds`.
+        self.sound_request = "player_hurt"
+
+    def drain(self, amount):
+        """Lose health without the flinch — for damage-over-time.
+
+        `take_damage` flashes the sprite, holds off regeneration and asks for a
+        grunt, all of which are right for *a blow* and wrong sixty times a
+        second. A drain still stops regeneration (or it would heal through the
+        web) but stays quiet.
+        """
+        self.health = max(0.0, self.health - amount)
+        self._dmg_delay = max(self._dmg_delay, settings.PLAYER_REGEN_DELAY)
 
     def heal(self, amount):
         self.health = min(self.max_health, self.health + amount)
@@ -106,6 +154,7 @@ class Player(Entity):
             return          # already stuck — a new web doesn't re-trap/replenish
         self.webbed = True
         self.struggle = settings.WEB_STRUGGLE_HITS
+        self.sound_request = "web_stuck"
 
     def struggle_free(self):
         """One Space press worth of struggling. Returns True when freed."""
@@ -115,6 +164,7 @@ class Player(Entity):
         if self.struggle <= 0:
             self.webbed = False
             self.struggle = 0
+            self.sound_request = "web_break"
             return True
         return False
 
@@ -124,8 +174,9 @@ class Player(Entity):
         if self._dmg_delay > 0:
             self._dmg_delay = max(0.0, self._dmg_delay - dt)
         elif self.health < self.max_health:
-            self.health = min(self.max_health,
-                              self.health + settings.PLAYER_HEALTH_REGEN * dt)
+            self.health = min(
+                self.max_health,
+                self.health + settings.PLAYER_HEALTH_REGEN * self.regen * dt)
 
     def update(self, dt, inp=None, collider=None):
         if inp is None:
@@ -155,6 +206,13 @@ class Player(Entity):
             self.facing = -1
         elif move.x > 0:
             self.facing = 1
+        if move.length_squared() > 0:
+            # Which way the *art* faces, as opposed to `facing`, which is only
+            # the horizontal mirror. Sideways wins ties: a diagonal reads better
+            # as a profile than as a back, and it is the direction the mirror
+            # can actually express.
+            self.facing_dir = "side" if abs(move.x) >= abs(move.y) else (
+                "up" if move.y < 0 else "down")
         self._moving = move.length_squared() > 0
         self._walk_t += dt if self._moving else 0
 
@@ -168,8 +226,8 @@ class Player(Entity):
         r = self.hitbox
         ox, oy = round(camera.offset.x), round(camera.offset.y)
         frame = self._current_frame()
-        bob = -1 if self._moving and int(self._walk_t * 7) % 2 else 0
-        img = pygame.transform.flip(frame, True, False) if self.facing < 0 else frame
+        bob = -1 if self._moving and self._step_phase(self._walk_t) else 0
+        img = pygame.transform.flip(frame, True, False) if self._mirrors() else frame
         lunge = self.facing * int(4 * (self.swing / settings.SWING_TIME)) if self.swing > 0 else 0
         sx = r.centerx - img.get_width() // 2 - ox + lunge
         sy = r.bottom - img.get_height() - oy + bob
@@ -178,32 +236,36 @@ class Player(Entity):
         surface.blit(img, (sx, sy))
         if self.swing > 0 and not self.throws:
             self._draw_swing(surface, r, ox, oy)
-        if self.webbed:
+        # Painted silk beats drawn silk: the procedural strands are the fallback
+        # for a checkout with no webbed art, not a layer on top of it.
+        if self.webbed and "webbed" not in self.frames:
             self._draw_web(surface, r, ox, oy)
 
     def _draw_swing(self, surface, r, ox, oy):
-        """A bright crescent slash sweeping in front of the warrior."""
+        """A glint travelling along the blade's tip.
+
+        ⚠️ This was **three stacked arcs** 48px across — a thick white crescent
+        that covered the warrior swinging it and read as a magic spell rather
+        than a sword. Now that the swing is a painted three-frame animation, the
+        arc was doing the job twice and drowning the art doing it better. What is
+        left is a short faint trail behind a single bright point: enough to say
+        *where the edge is*, and no more.
+        """
         progress = 1.0 - self.swing / settings.SWING_TIME     # 0 -> 1
         cx = r.centerx - ox + self.facing * 14
         cy = r.centery - oy - 2
-        radius = 24
-        box = pygame.Rect(cx - radius, cy - radius, radius * 2, radius * 2)
-        span = math.radians(75)
-        if self.facing >= 0:
-            a0 = math.radians(90 - progress * 165)
-            a1 = a0 + span
-        else:
-            a1 = math.radians(90 + progress * 165)
-            a0 = a1 - span
-        # layered arcs -> a thick, glowing slash
-        pygame.draw.arc(surface, (150, 180, 230), box.inflate(4, 4), a0, a1, 3)
-        pygame.draw.arc(surface, (255, 255, 255), box, a0, a1, 5)
-        pygame.draw.arc(surface, (230, 245, 255), box.inflate(-8, -8), a0, a1, 3)
-        # bright leading tip
-        tip = a0 if self.facing >= 0 else a1
-        tx = cx + math.cos(tip) * radius
-        ty = cy - math.sin(tip) * radius
-        pygame.draw.circle(surface, (255, 255, 255), (int(tx), int(ty)), 3)
+        radius = 22
+        # the tip sweeps through the same arc the blade does
+        sweep = math.radians(90 - progress * 165) if self.facing >= 0 else \
+            math.radians(90 + progress * 165)
+        for i, (back, size, rgb) in enumerate((
+                (0.30, 1, (120, 145, 190)),
+                (0.15, 2, (185, 205, 235)),
+                (0.00, 3, (255, 255, 255)))):
+            a = sweep + (back if self.facing >= 0 else -back)
+            tx = cx + math.cos(a) * radius
+            ty = cy - math.sin(a) * radius
+            pygame.draw.circle(surface, rgb, (int(tx), int(ty)), size)
 
     def _draw_web(self, surface, r, ox, oy):
         """Sticky web strands over the knight while entangled."""

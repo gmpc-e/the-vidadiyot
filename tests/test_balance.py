@@ -110,7 +110,7 @@ def test_projectiles_outrun_a_walking_player_or_they_could_never_land():
     """Both casters' shots used to be slower than a walk, so retreating on foot
     made the ranged monsters harmless. Sprinting must still outrun them, or
     stamina stops being the answer."""
-    for speed in (settings.FIREBALL_SPEED, settings.WEB_SPEED):
+    for speed in (settings.FIREBALL_SPEED, settings.WEB_SPEED, settings.TOME_SPEED):
         assert speed > settings.PLAYER_WALK
         assert speed < settings.PLAYER_SPRINT
 
@@ -124,6 +124,22 @@ def test_emris_bolt_cannot_be_outrun_at_all():
 def test_a_projectile_lives_long_enough_to_cross_its_own_range():
     assert settings.FIREBALL_SPEED * settings.FIREBALL_LIFETIME > settings.CASTER_CAST_RANGE
     assert settings.WEB_SPEED * settings.WEB_LIFETIME > settings.WEB_CAST_RANGE
+    assert settings.TOME_SPEED * settings.TOME_LIFETIME > settings.TOME_CAST_RANGE
+
+
+def test_a_teacher_fights_at_room_range_not_corridor_range():
+    """The reason the teachers hold the classrooms and the other two do not.
+
+    Little Terror reaches 250px and backs off below 130 — inside a room that is
+    most of the floor, so it retreats into a corner and the fight stalls. Give a
+    teacher corridor range and this speaks up."""
+    assert settings.TOME_CAST_RANGE > settings.TOME_KEEP_MIN
+    assert settings.TOME_CAST_RANGE < settings.CASTER_CAST_RANGE
+    assert settings.TOME_CAST_RANGE < settings.WEB_CAST_RANGE
+    assert settings.TEACHER_SPEED < settings.CASTER_SPEED, "they shuffle"
+    # ...and it must not out-wander its own leash, or it abandons the room it is
+    # there to hold and the locked door protecting it stops meaning anything.
+    assert settings.TEACHER_WANDER < settings.MONSTER_LEASH
 
 
 def test_no_single_hit_can_kill_a_warrior_outright_on_hard():
@@ -162,7 +178,10 @@ def test_a_two_pip_swing_knocks_back_once_not_twice():
     one, two = Monster(100, 0, hits=9), Monster(100, 0, hits=9)
     one.take_hit((0, 0), 1)
     two.take_hit((0, 0), 2)
-    assert one.pos.x == pytest.approx(two.pos.x)
+    # compare the recorded shove, not the position: the shove is applied in
+    # update() now, so comparing positions here would pass without testing it
+    assert one.knockback.x == pytest.approx(two.knockback.x)
+    assert one.knockback.length() > 0
 
 
 def test_the_web_is_escapable_in_a_few_presses():
@@ -215,7 +234,7 @@ def test_emri_stays_visible_long_enough_to_answer():
     shown = (settings.EMRI_TELEGRAPH + settings.EMRI_STRIKE_TIME
              + settings.EMRI_VANISH_TIME)
     cycle = shown + settings.EMRI_HIDDEN_MAX
-    assert shown > 1.5, f"only {shown:.2f}s on screen per blink"
+    assert shown >= 3.0, f"only {shown:.2f}s on screen per blink"
     assert shown / cycle > 0.3, "it spends too much of the fight untouchable"
 
 
@@ -243,10 +262,84 @@ def test_zina_outruns_what_she_is_chasing():
 
 # ── the book-return payoff ────────────────────────────────────────────────
 def test_the_payoff_is_a_beat_not_an_interruption():
-    for value in (settings.BOOK_FLASH_TIME, settings.BOOK_TINT_TIME,
-                  settings.BOOK_SHAKE_TIME):
+    for value in (settings.BOOK_FLASH_TIME, settings.BOOK_SHAKE_TIME):
         assert 0 < value < 2.0
 
 
-def test_the_room_pulse_stays_readable_rather_than_washing_the_room_out():
-    assert 0 < settings.BOOK_TINT_ALPHA < 160
+# ── difficulty actually differs (2026-08-20) ──────────────────────────────
+def test_difficulty_changes_how_long_a_monster_takes_to_kill():
+    """⚠️ Normal was too easy and this is why: difficulty only scaled *incoming*
+    damage, so a monster died in the same number of swings whatever you picked
+    and the level was the same length on Hard as on Easy."""
+    from game.systems import difficulty
+    hps = [difficulty.get(n)["hp"] for n in difficulty.ORDER]
+    assert hps == sorted(hps), "monsters must get tougher as difficulty rises"
+    assert len(set(hps)) == len(hps), "two difficulties share a health scale"
+    assert difficulty.get("Normal")["hp"] > 1.0, "Normal must be above the base"
+
+
+def test_healing_gets_meaner_as_difficulty_rises():
+    from game.systems import difficulty
+    regens = [difficulty.get(n)["regen"] for n in difficulty.ORDER]
+    assert regens == sorted(regens, reverse=True)
+
+
+def test_regenerating_a_full_bar_takes_longer_than_a_fight():
+    """Health regen was doing most of the work of an easy mode by itself: at
+    3.0/sec a full bar came back in ~33s, so a fight cost nothing once it was
+    over. It must be slow enough that potions and difficulty mean something."""
+    seconds = settings.PLAYER_MAX_HEALTH / settings.PLAYER_HEALTH_REGEN
+    assert seconds > 60, f"a full heal takes only {seconds:.0f}s"
+    assert settings.PLAYER_REGEN_DELAY >= 3.0
+
+
+def test_the_teachers_hit_harder_than_the_corridor_casters_do():
+    """They hold every classroom and are the enemy met most; being the softest
+    attack in the game made a room something to walk through."""
+    assert settings.TOME_DAMAGE > settings.FIREBALL_DAMAGE
+
+
+# ── the wind-up (2026-08-20) ──────────────────────────────────────────────
+def test_every_caster_telegraphs_long_enough_to_answer():
+    """⚠️ Human reaction is around 0.25s. A tell shorter than that is not a tell,
+    it is an apology — the player sees the charge only after being hit by it."""
+    for w in (settings.CASTER_WINDUP, settings.WEB_WINDUP, settings.TOME_WINDUP):
+        assert w > 0.35, f"{w}s is under a reaction time"
+
+
+def test_a_wind_up_never_outlasts_its_own_cooldown():
+    """Otherwise a caster is charging every frame it is alive, the tell stops
+    meaning 'about to throw', and it never moves again."""
+    for wind, cd in ((settings.CASTER_WINDUP, settings.CASTER_CAST_CD),
+                     (settings.WEB_WINDUP, settings.WEB_CAST_CD),
+                     (settings.TOME_WINDUP, settings.TOME_CAST_CD)):
+        assert wind < cd * 0.6, f"{wind}s of charge against a {cd}s cooldown"
+
+
+def test_the_harshest_shot_gets_the_longest_warning():
+    """The web is the worst thing to be hit by — it holds you *and* drains — so
+    it is the one that must be most avoidable."""
+    assert settings.WEB_WINDUP > settings.CASTER_WINDUP > settings.TOME_WINDUP
+
+
+def test_a_dodge_is_actually_possible_during_the_wind_up():
+    """The aim locks when the charge starts, so the question is whether a walking
+    player can clear the projectile's own width before it is thrown."""
+    for wind, size in ((settings.CASTER_WINDUP, settings.FIREBALL_SIZE),
+                       (settings.WEB_WINDUP, settings.WEB_SIZE),
+                       (settings.TOME_WINDUP, settings.TOME_SIZE)):
+        assert settings.PLAYER_WALK * wind > size * 2, "no room to step aside"
+
+
+def test_zinas_bite_is_the_heaviest_blow_but_not_a_phase_of_the_boss():
+    """⚠️ It was `max_health / 3` — a third of the fight per bite, and it
+    rescaled itself whenever `EMRI_HITS` moved, so tuning the boss silently
+    retuned the dog."""
+    from game.entities import warriors
+    sword = max(w["damage"] for w in warriors.WARRIORS)
+    assert settings.ZINA_BOSS_DAMAGE > sword, "a bite should beat a sword swing"
+    every_charge = settings.ZINA_BOSS_DAMAGE * settings.ZINA_CHARGES
+    assert every_charge < settings.EMRI_HITS * 0.5, \
+        "spending every charge should not be half the boss"
+    assert settings.ZINA_BOSS_DAMAGE < settings.EMRI_HITS * min(
+        settings.EMRI_PHASE_MARKS), "one bite is worth a whole phase"

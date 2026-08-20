@@ -4,6 +4,7 @@ import pytest
 
 import settings
 from game.core.camera import Camera
+from game.core.input import InputState
 from game.entities import warriors
 from game.entities.monster import Monster
 from game.entities.player import Player
@@ -65,11 +66,11 @@ def test_the_card_and_the_real_numbers_agree_in_spirit():
 
 
 def test_the_knight_trades_speed_and_range_for_power_and_health():
-    elad, roni = warriors.get("elad"), warriors.get("roni")
-    assert elad["damage"] > roni["damage"], "the sword must hit harder"
-    assert elad["max_health"] > roni["max_health"]
-    assert roni["speed"] > elad["speed"]
-    assert roni["reach"] > elad["reach"], "she fights at range"
+    wallad, roni = warriors.get("wallad"), warriors.get("roni")
+    assert wallad["damage"] > roni["damage"], "the sword must hit harder"
+    assert wallad["max_health"] > roni["max_health"]
+    assert roni["speed"] > wallad["speed"]
+    assert roni["reach"] > wallad["reach"], "she fights at range"
 
 
 @pytest.mark.parametrize("w", warriors.WARRIORS, ids=lambda w: w["id"])
@@ -80,7 +81,7 @@ def test_every_warrior_declares_a_weapon_that_deals_damage(w):
 
 def test_only_roni_carries_a_power():
     assert warriors.get("roni")["power"] == "zina"
-    assert warriors.get("elad")["power"] is None
+    assert warriors.get("wallad")["power"] is None
 
 
 # ── Zina ──────────────────────────────────────────────────────────────────
@@ -129,7 +130,10 @@ def test_she_barks_on_the_way_out_and_back_but_not_mid_bite(pair):
         elif z.sound_request == "zina_bite":
             bites += 1
         z.sound_request = None
-    assert barks >= 2, "she should bark a few times"
+    # Was ">= 2 barks", written when the bark was a synthesized 0.3s yap that
+    # wanted repeating. The delivered sound is 1.85s of *sequence*, so one play
+    # covers her whole run-in and retriggering it stacked copies of itself.
+    assert barks >= 1, "she should announce herself"
     assert bites == 1, "exactly one bite sound per trip"
     assert bark_while_biting == 0, "no barking with her mouth full"
 
@@ -191,3 +195,32 @@ def test_zina_draws_in_every_state(pair, surface, camera):
 def test_zina_draws_without_a_sprite(pair, surface, camera):
     owner, target = pair
     Zina(owner, target).draw(surface, camera)
+
+
+def test_a_zina_kill_leaves_a_splash_that_fades(make_play, surface, step):
+    """§19. It is one sprite and a timer — the general effects pool that used to
+    exist was deleted with the burst it served, and this is one caller again."""
+    play = make_play("roni")
+    victim = play.monsters[0]
+    play.player.pos.update(victim.pos.x - 30, victim.pos.y)
+    play.player.power_charges = 1
+    play._use_power()
+    for _ in range(240):
+        play.update(settings.FIXED_DT, InputState())
+        if play.splashes:
+            break
+    assert play.splashes, "no splash where the bite landed"
+    where = play.splashes[0].pos
+    assert where.distance_to(victim.pos) < 40
+    step(play, 60, surface=surface)
+    assert play.splashes == [], "it never faded"
+
+
+def test_the_drawn_bite_star_is_only_a_fallback(make_play, surface):
+    """⚠️ It drew on every bite, and once the painted splash landed it was a
+    white spoked star over a red burst — which reads as a glitch, not a kill."""
+    play = make_play("roni")
+    assert play.bite_sprite is not None, "the art is installed"
+    play.player.power_charges = 1
+    play._use_power()
+    assert play.zina.painted_bite, "the drawn star is still switched on"

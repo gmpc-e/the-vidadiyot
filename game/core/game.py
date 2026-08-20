@@ -30,7 +30,7 @@ class Game:
         self.state_stack = []
         self.running = True
         self.difficulty = "Normal"      # chosen in the menu; see systems/difficulty.py
-        self.warrior = "elad"           # chosen in the menu; see entities/warriors.py
+        self.warrior = "wallad"           # chosen in the menu; see entities/warriors.py
 
     # ── state stack ────────────────────────────────────────────────────────
     def push(self, state):

@@ -44,15 +44,21 @@ class Knife(Entity):
     def on_hit(self, monster):
         """Returns True if the blade finished the monster off."""
         self.dead = True
-        return monster.take_hit(self.pos - self.dir * 8, self.damage)
+        # pass the blade's own heading: where it *landed* is inside the monster
+        return monster.take_hit(self.pos - self.dir * 8, self.damage,
+                                direction=self.dir)
 
     def draw(self, surface, camera):
+        """Just the blade.
+
+        ⚠️ **No streak trail.** It was five drawn lines behind the knife, added
+        when the knife itself was a 3px circle and needed help reading as a
+        thrown object. It is a painted blade now, and the trail was drawing a
+        second, cruder weapon behind the real one. `_trail` is still recorded —
+        it is two lines of bookkeeping and the next effect that wants a path
+        will want it — but nothing draws it.
+        """
         off = camera.offset
-        for i, (tx, ty) in enumerate(self._trail):
-            length = 3 + i
-            a = pygame.Vector2(tx, ty) - off
-            b = a - self.dir * length
-            pygame.draw.line(surface, STREAK, a, b, 1)
         cx, cy = self.pos.x - off.x, self.pos.y - off.y
         if self.sprite:
             angle = -self.dir.angle_to(pygame.Vector2(1, 0)) - self._spin * 40

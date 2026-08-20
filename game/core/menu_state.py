@@ -42,6 +42,7 @@ PORTRAIT_CX = 108
 
 class MenuState(State):
     def enter(self):
+        self.game.audio.play_music("menu")   # the title screen's own theme
         self.sel = 0
         self.t = 0.0
         self.font_big = self.game.assets.font(None, 40)
@@ -172,7 +173,10 @@ class MenuState(State):
         chosen = self._warrior["id"]
         heroes = []
         for w in warriors.WARRIORS:
-            img = self.game.assets.image(f"sprites/{w['id']}_menu.png")
+            # ⚠️ Named, not derived from the id. It *was* f"{w['id']}_menu.png",
+            # which quietly made the warrior's id part of an asset path — so
+            # renaming the character broke the select screen.
+            img = self.game.assets.image(f"sprites/{w['menu']}.png")
             heroes.append((img, 76 if w["id"] == chosen else 62))
 
         x = 12
@@ -228,12 +232,12 @@ class HowToState(_BackScreen):
         "",
         "Move ...... WASD / Arrow keys      Sprint .... Shift (stamina)",
         "Interact .. E  (unlock doors, return books)",
-        "Attack .... Space  (Elad swings, Roni throws knives)",
+        "Attack .... Space  (Wallad swings, Roni throws knives)",
         "Power ..... Z  (Roni only: send Zina - 3 bites, kills outright)",
         "Mute ...... M      Pause ..... Esc      Quit ...... Q",
         "",
         "Pick your warrior in the menu (Left/Right on that row):",
-        "Elad hits for two pips and takes more punishment.",
+        "Wallad hits for two pips and takes more punishment.",
         "Roni is faster and fights at range, but one pip a knife.",
         "",
         "Keys unlock the colored classroom doors. Little Terror throws",

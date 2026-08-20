@@ -27,12 +27,15 @@ class Zina(Entity):
 
     OUT, BITE, BACK = "out", "bite", "back"
 
-    def __init__(self, owner, target, sprite=None):
+    def __init__(self, owner, target, sprite=None, painted_bite=False):
         w, h = settings.ZINA_SIZE
         super().__init__(owner.pos.x, owner.pos.y, w, h)
         self.owner = owner
         self.target = target
         self.sprite = sprite
+        # True when PlayState has a painted bite splash to show instead of the
+        # drawn white star — see `_draw_bite`.
+        self.painted_bite = painted_bite
         self.state = self.OUT
         self.timer = 0.0
         self.done = False
@@ -92,12 +95,19 @@ class Zina(Entity):
             pygame.draw.ellipse(surface, FUR, (cx - 12, cy - 7, 24, 14))
             pygame.draw.circle(surface, FUR_DARK, (int(cx + 9 * self.facing), int(cy - 4)), 5)
         if self.state == self.BITE:
-            self._draw_bite(surface, cx, cy)
+            if not self.painted_bite:
+                self._draw_bite(surface, cx, cy)
         else:
             self._draw_dust(surface, cx, cy)
 
     def _draw_bite(self, surface, cx, cy):
-        """A white impact star, so the instant kill reads as a *bite*."""
+        """A white impact star — the **fallback**, for a checkout with no art.
+
+        ⚠️ This used to draw on every bite, and once `bite_splash.png` landed it
+        was a second effect on top of the painted one: a white spoked star over a
+        red burst, which read as a glitch rather than as a kill. `painted_bite`
+        is set by PlayState when the art is installed.
+        """
         for i in range(8):
             a = i * math.tau / 8 + self.timer * 8
             r0, r1 = 8, 17

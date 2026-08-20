@@ -33,7 +33,7 @@ them (~117MB of build output against ~1.5MB of source).
 ## Testing
 
 ```bash
-./venv/bin/python -m pytest        # 330 tests, ~10s, headless
+./venv/bin/python -m pytest        # 478 tests, ~10s, headless
 ```
 
 Run the suite before reporting work complete. Two conventions worth knowing:
@@ -77,6 +77,12 @@ Painted art arrives on flat black and is keyed by one of two strategies
 (`MODE_FILL` for lit subjects, `MODE_RAMP` for subjects made of shadow). See
 `tools/spritelib.py`, and `docs/ART_REQUESTS.md` / `docs/ART_PROMPTS.md` for what
 to ask for and how.
+
+`tools/art_request.py` asks an image model for a sheet directly, using those
+prompt packs as its source of truth. **It sends only the blockquote under each
+`## §N` / `## Sheet N —` heading** — put a prompt outside a `>` quote and the
+tool silently requests nothing. The API key lives in `.env` at the repo root,
+which is gitignored; never commit it and never echo it into a transcript.
 
 ## Style
 

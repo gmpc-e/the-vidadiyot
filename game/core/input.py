@@ -15,13 +15,14 @@ class InputState:
     hands them to exactly one step; see `latch_edges_from` / `with_edges_of`.
     """
 
-    EDGE_FIELDS = ("interact", "attack", "pause", "mute", "power")
+    EDGE_FIELDS = ("interact", "attack", "pause", "mute", "power", "confirm")
 
     def __init__(self):
         self.move = pygame.Vector2(0, 0)   # normalized direction, magnitude 0..1
         self.sprint = False
         self.interact = False              # edge: True only on the press frame
         self.attack = False                # edge
+        self.confirm = False               # edge: Enter, for menus only
         self.pause = False                 # edge
         self.mute = False                  # edge
         self.power = False                 # edge: the warrior's active power (Z)
@@ -69,6 +70,12 @@ class Input:
         state.sprint = bool(keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT])
         state.interact = self._pressed(keys, pygame.K_e)
         state.attack = self._pressed(keys, pygame.K_SPACE)
+        # ⚠️ Enter is a *menu* confirm, not an attack. The end screens say
+        # "Enter: play again" and only Space actually worked; rather than fix
+        # the label, both now do. It is deliberately not folded into `attack` —
+        # binding Enter to the sword would let a player swing from the menu key.
+        state.confirm = self._pressed(keys, pygame.K_RETURN) or \
+            self._pressed(keys, pygame.K_KP_ENTER)
         state.pause = self._pressed(keys, pygame.K_ESCAPE)
         state.mute = self._pressed(keys, pygame.K_m)
         state.power = self._pressed(keys, pygame.K_z)

@@ -30,3 +30,9 @@ dist/
 # The leaderboard lives in the user's Application Support dir, not here, but
 # older builds wrote it locally.
 data/scores.json
+
+# ─── Secrets ──────────────────────────────────────────────────────────────
+# `tools/art_request.py` reads the OpenAI key from here. Never commit it — a
+# key pushed to a public remote is burned the moment it lands, even if the
+# next commit removes it.
+.env

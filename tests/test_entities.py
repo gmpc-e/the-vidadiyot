@@ -3,6 +3,7 @@ import pygame
 import pytest
 
 import settings
+from game.core.input import InputState
 from game.core.camera import Camera
 from game.entities import warriors
 from game.entities.entity import Entity
@@ -112,7 +113,7 @@ def test_player_defaults_to_the_default_warrior():
 
 def test_only_a_warrior_with_a_power_starts_with_charges():
     assert Player(0, 0, warriors.get("roni")).power_charges == settings.ZINA_CHARGES
-    assert Player(0, 0, warriors.get("elad")).power_charges == 0
+    assert Player(0, 0, warriors.get("wallad")).power_charges == 0
 
 
 def test_spending_a_power_runs_the_charges_out_and_then_refuses():
@@ -123,7 +124,7 @@ def test_spending_a_power_runs_the_charges_out_and_then_refuses():
 
 
 def test_a_powerless_warrior_can_never_spend():
-    assert not Player(0, 0, warriors.get("elad")).spend_power()
+    assert not Player(0, 0, warriors.get("wallad")).spend_power()
 
 
 # ── Player: health ────────────────────────────────────────────────────────
@@ -198,11 +199,11 @@ def test_sprint_scales_each_warrior_from_their_own_pace(inp):
     """The fast warrior must stay the fast one when sprinting."""
     inp.move = pygame.Vector2(1, 0)
     inp.sprint = True
-    elad = Player(0, 0, warriors.get("elad"))
+    wallad = Player(0, 0, warriors.get("wallad"))
     roni = Player(0, 0, warriors.get("roni"))
-    elad.update(0.1, inp)
+    wallad.update(0.1, inp)
     roni.update(0.1, inp)
-    assert roni.pos.x > elad.pos.x
+    assert roni.pos.x > wallad.pos.x
 
 
 def test_stamina_cannot_be_spent_below_zero(inp):
@@ -248,7 +249,7 @@ def test_animation_state_priority_is_hurt_then_attack_then_walk(inp):
 def test_the_walk_cycle_really_alternates_between_two_frames():
     p = Player(0, 0)
     frames = [pygame.Surface((8, 8), pygame.SRCALPHA) for _ in range(4)]
-    p.set_frames(*frames)
+    p.set_frames(**dict(zip(("idle", "walk", "attack", "hurt"), frames)))
     p._moving = True
     seen = {id(p._current_frame()) for i in range(20) for p._walk_t in (i * 0.05,)}
     assert len(seen) == 2
@@ -257,7 +258,7 @@ def test_the_walk_cycle_really_alternates_between_two_frames():
 def test_set_frames_installs_every_state():
     p = Player(0, 0)
     frames = [pygame.Surface((8, 8), pygame.SRCALPHA) for _ in range(4)]
-    p.set_frames(*frames)
+    p.set_frames(**dict(zip(("idle", "walk", "attack", "hurt"), frames)))
     assert set(p.frames) == {"idle", "walk", "attack", "hurt"}
     assert p.sprite is frames[0]
 
@@ -269,7 +270,8 @@ def test_the_player_draws_without_frames_installed(surface, camera):
 
 def test_the_player_draws_in_every_state(surface, camera):
     p = Player(100, 100)
-    p.set_frames(*[pygame.Surface((8, 8), pygame.SRCALPHA) for _ in range(4)])
+    p.set_frames(**{s: pygame.Surface((8, 8), pygame.SRCALPHA)
+                    for s in ("idle", "walk", "attack", "hurt")})
     for setup in (lambda: None, p.start_swing, p.take_web,
                   lambda: p.take_damage(1)):
         setup()
@@ -399,3 +401,147 @@ def test_projectiles_draw(cls, args, surface, camera):
     p = cls(100, 100, (1, 0), *args)
     p.update(0.05)
     p.draw(surface, camera)
+
+
+# ── directional facing ────────────────────────────────────────────────────
+def _four_pose_player():
+    p = Player(100, 100)
+    frames = {s: pygame.Surface((8, 8), pygame.SRCALPHA)
+              for s in ("idle", "walk", "attack", "hurt")}
+    for d in ("down", "up", "side"):
+        frames[f"walk_{d}"] = [pygame.Surface((8, 8), pygame.SRCALPHA)
+                               for _ in range(3)]
+    p.set_frames(**frames)
+    return p
+
+
+def _walk(p, dx, dy):
+    inp = InputState()
+    inp.move = pygame.Vector2(dx, dy)
+    p.update(settings.FIXED_DT, inp, collider=None)
+    return p.anim_state
+
+
+def test_the_player_picks_the_view_that_matches_where_it_walks():
+    """⚠️ A back view cannot be mirrored out of a front view — walking away is
+    the direction that needs its own art, and this is what selects it."""
+    p = _four_pose_player()
+    assert _walk(p, 0, 1) == "walk_down"
+    assert _walk(p, 0, -1) == "walk_up"
+    assert _walk(p, 1, 0) == "walk_side"
+    assert _walk(p, -1, 0) == "walk_side"
+    # a diagonal reads better as a profile, and it is the one the mirror can
+    # actually express
+    assert _walk(p, 1, 1) == "walk_side"
+
+
+def test_a_warrior_without_directional_art_behaves_exactly_as_before():
+    """The rows are optional, so a character with one walk pose is untouched."""
+    p = Player(0, 0)
+    p.set_frames(**{s: pygame.Surface((8, 8), pygame.SRCALPHA)
+                    for s in ("idle", "walk", "attack", "hurt")})
+    assert _walk(p, 0, -1) == "walk"
+    assert _walk(p, 1, 0) == "walk"
+
+
+def test_only_the_side_view_is_mirrored(surface, camera):
+    """Flipping a front or back view swaps the sword into the wrong hand for no
+    gain — the character is symmetrical about the camera that way."""
+    p = _four_pose_player()
+    _walk(p, -1, 0)
+    assert p.facing == -1 and p.anim_state == "walk_side"
+    _walk(p, 0, -1)
+    assert p.facing == -1, "walking up must not clear the horizontal facing"
+    assert p.anim_state == "walk_up"
+    for d in ((0, 1), (0, -1), (-1, 0), (1, 0)):
+        _walk(p, *d)
+        p.draw(surface, camera)
+
+
+def test_stopping_does_not_spin_the_warrior_round_to_face_the_camera():
+    """⚠️ Needs no art: a three-frame walk is contact / passing / contact, and
+    the passing frame has the legs together and the body upright — near enough a
+    standing pose to hold."""
+    p = _four_pose_player()
+    p.frames["idle_up"] = pygame.Surface((8, 8), pygame.SRCALPHA)
+    p.frames["idle_side"] = pygame.Surface((8, 8), pygame.SRCALPHA)
+    _walk(p, 0, -1)
+    assert _walk(p, 0, 0) == "idle_up", "he turned around when he stopped"
+    _walk(p, 1, 0)
+    assert _walk(p, 0, 0) == "idle_side"
+    _walk(p, 0, 1)
+    assert _walk(p, 0, 0) == "idle", "down keeps the painted standing pose"
+
+
+def test_a_warrior_with_no_directional_art_still_just_idles():
+    p = Player(0, 0)
+    p.set_frames(**{s: pygame.Surface((8, 8), pygame.SRCALPHA)
+                    for s in ("idle", "walk", "attack", "hurt")})
+    _walk(p, 0, -1)
+    assert _walk(p, 0, 0) == "idle"
+
+
+def test_only_sideways_views_mirror():
+    """A mirrored front or back view puts the sword in the wrong hand."""
+    p = _four_pose_player()
+    p.frames["idle_up"] = pygame.Surface((8, 8), pygame.SRCALPHA)
+    _walk(p, -1, 0)                       # facing left from here on
+    assert p._mirrors(), "the side view must mirror"
+    _walk(p, 0, -1)
+    assert not p._mirrors(), "a back view must not mirror"
+    _walk(p, 0, 1)
+    assert not p._mirrors(), "a front view must not mirror"
+    _walk(p, 0, 0)                        # idle, still facing down
+    assert not p._mirrors(), "idle is a front view once directions exist"
+
+    plain = Player(0, 0)
+    plain.set_frames(**{s: pygame.Surface((8, 8), pygame.SRCALPHA)
+                        for s in ("idle", "walk", "attack", "hurt")})
+    _walk(plain, -1, 0)
+    _walk(plain, 0, 0)
+    assert plain._mirrors(), "a character with one pose keeps the old behaviour"
+
+
+# ── the webbed pose (§22, §23) ────────────────────────────────────────────
+def _webbed_player(frames=4):
+    p = Player(0, 0)
+    poses = {s: pygame.Surface((8, 8), pygame.SRCALPHA)
+             for s in ("idle", "walk", "attack", "hurt")}
+    poses["webbed"] = [pygame.Surface((8, 8), pygame.SRCALPHA) for _ in range(frames)]
+    p.set_frames(**poses)
+    return p
+
+
+def test_the_web_pose_unwraps_as_you_mash_free():
+    """⚠️ The strip runs barely-caught to fully-wrapped, so it plays *backwards*:
+    struggling is the progress bar, not a clock."""
+    p = _webbed_player()
+    p.take_web()
+    strip = p.frames["webbed"]
+    assert p._current_frame() is strip[-1], "not fully wrapped when first caught"
+    seen = [p._current_frame()]
+    while p.webbed:
+        p.struggle_free()
+        if p.webbed:
+            seen.append(p._current_frame())
+    assert seen[-1] is not strip[-1], "it never unwrapped"
+    assert strip.index(seen[-1]) < strip.index(seen[0])
+
+
+def test_being_webbed_outranks_being_hit():
+    """The web drains health every frame, so `hurt_flash` is nearly always up
+    while caught — and a flinch pose over a trapped one reads as neither."""
+    p = _webbed_player()
+    p.take_web()
+    p.take_damage(1)
+    assert p.hurt_flash > 0
+    assert p.anim_state == "webbed"
+
+
+def test_a_warrior_with_no_webbed_art_falls_back_to_drawn_strands(surface, camera):
+    p = Player(100, 100)
+    p.set_frames(**{s: pygame.Surface((8, 8), pygame.SRCALPHA)
+                    for s in ("idle", "walk", "attack", "hurt")})
+    p.take_web()
+    assert p.anim_state != "webbed"
+    p.draw(surface, camera)          # the procedural fallback must still draw

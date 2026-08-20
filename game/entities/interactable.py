@@ -6,7 +6,10 @@ interact()" flow in PlayState.
 """
 import pygame
 
-from game.world.palette import color_rgb
+from game.core.assets import load
+from game.world.palette import color_rgb, tint
+
+DOOR_SPRITES = {True: "sprites/door_closed.png", False: "sprites/door_open.png"}
 
 
 def rect_dist(rect, point):
@@ -45,10 +48,13 @@ class Door:
     def draw(self, surface, camera):
         r = self.rect.move(-round(camera.offset.x), -round(camera.offset.y))
         rgb = color_rgb(self.color)
-        if self.locked:
-            self._draw_closed(surface, r, rgb)
-        else:
-            self._draw_open(surface, r, rgb)
+        img = load(DOOR_SPRITES[self.locked])
+        if img is None:                       # no painted art on this checkout
+            (self._draw_closed if self.locked else self._draw_open)(surface, r, rgb)
+            return
+        if img.get_size() != r.size:
+            img = pygame.transform.smoothscale(img, r.size)
+        surface.blit(tint(img, rgb), r.topleft)
 
     def _draw_closed(self, surface, r, rgb):
         # two wooden panels with a seam, a color plate, a lock and a handle
@@ -106,31 +112,21 @@ class Locker:
     def draw(self, surface, camera):
         r = self.rect.move(-round(camera.offset.x), -round(camera.offset.y))
         rgb = color_rgb(self.color)
+        img = load("props/locker_open.png" if self.filled else "props/locker.png")
+        if img is None:
+            self._draw_flat(surface, r, rgb)
+        else:
+            # Anchored bottom-left, never scaled to the rect: the open state is
+            # wider than the shut one because the door swings out, so stretching
+            # each to the same box would make the locker body jump the moment a
+            # book went in. The body stays put and the door appears beside it.
+            surface.blit(tint(img, rgb), (r.left, r.bottom - img.get_height()))
+
+    def _draw_flat(self, surface, r, rgb):
+        """Fallback locker, for a checkout with no painted props installed."""
         pygame.draw.rect(surface, (96, 99, 110), r)
         pygame.draw.rect(surface, (38, 40, 48), r, 1)
-        # the colored plate: the room's color, readable from across the room
-        plate = pygame.Rect(0, 0, r.width - 8, 6)
-        plate.midtop = (r.centerx, r.top + 4)
-        pygame.draw.rect(surface, rgb, plate)
-        pygame.draw.rect(surface, (20, 20, 26), plate, 1)
-        if self.filled:
-            self._draw_open(surface, r, rgb)
-        else:
-            self._draw_shut(surface, r)
-
-    def _draw_shut(self, surface, r):
-        for i in range(3):            # vent slits
-            y = r.top + 14 + i * 3
+        for i in range(3):
+            y = r.top + 22 + i * 3
             pygame.draw.line(surface, (62, 64, 74), (r.left + 5, y), (r.right - 6, y), 1)
         pygame.draw.rect(surface, (188, 186, 176), (r.right - 6, r.centery + 2, 2, 6))
-
-    def _draw_open(self, surface, r, rgb):
-        """Door swung aside with the returned book on the shelf, lit by its color."""
-        inner = pygame.Rect(r.left + 5, r.top + 12, r.width - 7, r.height - 15)
-        pygame.draw.rect(surface, (26, 26, 32), inner)
-        pygame.draw.rect(surface, (140, 142, 152), (r.left, r.top + 12, 4, r.height - 14))
-        book = pygame.Rect(inner.left + 3, inner.centery - 4, inner.width - 7, 9)
-        pygame.draw.rect(surface, rgb, book)
-        pygame.draw.rect(surface, (16, 14, 18), book, 1)
-        pygame.draw.line(surface, (245, 240, 225),
-                         (book.left + 2, book.top + 2), (book.right - 3, book.top + 2), 1)

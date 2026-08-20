@@ -5,6 +5,7 @@ import pytest
 import settings
 from game.core.input import InputState
 from game.core.play_state import PlayState
+from game.entities.pickup import Pickup
 from game.entities.monster import Blinker, Monster
 from game.systems.eventbus import Events
 
@@ -21,8 +22,13 @@ def _room(play, rid="classroom_a"):
 
 
 def _stand_in(play, rid="classroom_a"):
+    """Stand at the room's return locker — the book's destination since §5.
+
+    Standing anywhere in the room used to be enough. It isn't: the drop is a
+    specific spot you have to walk to, which is the whole point of the locker.
+    """
     room = _room(play, rid)
-    play.player.pos.update(room["rect"].center)
+    play.player.pos.update(play.lockers[rid].rect.center)
     play.camera.snap_to(play.player.pos)
     return room
 
@@ -37,7 +43,6 @@ def test_every_classroom_has_a_colour_a_tint_and_furniture(play):
     for rid, room in play.classrooms.items():
         assert room["color"], f"{rid} has no colour"
         assert rid in play.classroom_tints
-        assert rid in play.classroom_pulses
         assert rid in play.classroom_decor
 
 
@@ -57,28 +62,63 @@ def test_locked_doors_are_solid_and_open_ones_are_not(play):
 def test_the_starting_roster_is_the_fixed_cast(play):
     """No respawns means this is the whole level, and every book has a guard."""
     names = [m.name for m in play.monsters]
-    assert set(names) == {"Little Terror", "Little Snir"}
-    assert len(play.monsters) == len(play.classrooms) * 2, "one guard + one resident"
+    assert set(names) == {"Little Terror", "Little Snir", "Teacher", "Schoolmaster"}
+    # three classrooms x (a teacher inside + a corridor monster), plus one in the
+    # electrical room, which used to be the only room you could cross for free
+    assert len(play.monsters) == len(play.classrooms) * 2 + 1
 
 
-def test_every_book_on_the_map_is_guarded(play):
-    """An unguarded book is a free objective — the level was finishable in about
-    a minute when one of them could just be picked up."""
-    books = [p for p in play.pickups if p.item_type == "book"]
-    assert books
-    guarded_variants = {m.guards for m in play.monsters if m.guards}
-    for b in books:
-        assert b.variant in guarded_variants, f"the {b.variant} book has no guard"
-        assert b.guarded
+def test_the_classrooms_hold_teachers_and_the_corridors_hold_the_casters(play):
+    """A range decision, not a flavour one — see MONSTERS in tools/gen_map.py.
+
+    Snir and Little Terror reach 250-260px and kite away below 120. A classroom
+    is barely wider than that, so indoors they back into a corner and the fight
+    stops working. Put one of them inside again and this speaks up."""
+    rooms = [room["rect"] for room in play.classrooms.values()]
+    for m in play.monsters:
+        indoors = any(r.collidepoint(m.pos) for r in rooms)
+        if indoors:
+            assert m.cast_kind == "tome", f"{m.name} is a corridor monster indoors"
+        else:
+            assert m.cast_kind in ("fire", "web"), f"{m.name} belongs in a room"
 
 
-def test_a_guarded_book_cannot_be_picked_up_until_its_guard_dies(play):
-    guarded = [p for p in play.pickups if p.guarded]
-    assert guarded, "the map should start with at least one guarded book"
-    book = guarded[0]
-    play.player.pos.update(book.pos)
+def test_no_book_starts_on_the_floor_and_every_locker_has_a_carrier(play):
+    """§5: a book is *won*, not found.
+
+    Lying in the corridor behind a `guarded` flag, a book was visible and inert
+    from the first minute, and the fight that freed it happened in another room.
+    Every book now starts in a teacher's hands, and there is exactly one carrier
+    per locker or a room becomes uncompletable."""
+    assert not [p for p in play.pickups if p.item_type == "book"]
+    carried = [m.drops for m in play.monsters if m.drops]
+    assert sorted(carried) == sorted(set(carried)), "two monsters carry one book"
+    assert set(carried) == {lk.color for lk in play.lockers.values()}
+
+
+def test_killing_a_carrier_drops_a_shining_book_where_it_stood(play):
+    teacher = next(m for m in play.monsters if m.drops)
+    where = pygame.Vector2(teacher.pos)
+    play._on_monster_died(teacher)
+    book = next(p for p in play.pickups if p.item_type == "book")
+    assert book.variant == teacher.drops
+    assert book.pos.distance_to(where) < 1
+    assert book.shining, "a won book has to announce itself"
+    assert not book.guarded, "nothing is left to guard it"
+
+
+def test_a_guarded_pickup_cannot_be_taken_until_its_guard_dies(play):
+    """The `guarded` flag is unused by level one now that books drop from their
+    carriers, but the mechanic stays: it is how a map places an item behind a
+    fight rather than behind a door."""
+    book = Pickup(play.player.pos.x, play.player.pos.y, "book", "red")
+    book.guarded = True
+    play.pickups.append(book)
     play._collect_pickups()
     assert book in play.pickups, "it must stay on the floor while guarded"
+    book.guarded = False
+    play._collect_pickups()
+    assert book not in play.pickups
 
 
 # ── interaction ───────────────────────────────────────────────────────────
@@ -130,6 +170,59 @@ def test_the_wrong_book_is_refused_and_the_hint_explains_why(play, step):
     assert play._compute_hint() == "Wrong classroom for this book"
 
 
+def test_a_book_cannot_go_home_while_a_monster_is_still_in_the_room(play, step):
+    """§5's whole point: the drop is earned with a fight, not a walk."""
+    room = _stand_in(play, "classroom_a")
+    play.inventory.add("book", room["color"])
+    resident = next(m for m in play.monsters if room["rect"].collidepoint(m.pos))
+    before = play.quests.get("return_books")
+    step(play, 1, inp=_press(interact=True))
+    assert play.quests.get("return_books") == before, "it delivered past a guard"
+    assert play.inventory.count("book") == 1
+    assert play._compute_hint() == "Clear the room first!"
+    play.monsters.remove(resident)
+    _stand_in(play, "classroom_a")
+    step(play, 1, inp=_press(interact=True))
+    assert play.quests.get("return_books")[0] == before[0] + 1
+
+
+def test_any_monster_in_the_room_blocks_the_drop_not_just_its_guard(play):
+    """A monster chased in from the corridor counts too — "something is in here
+    with me" is the readable rule. Nothing respawns, so it can't deadlock."""
+    room = _room(play, "classroom_a")
+    for m in list(play.monsters):
+        if room["rect"].collidepoint(m.pos):
+            play.monsters.remove(m)
+    assert play.room_cleared("classroom_a")
+    intruder = play.monsters[0]
+    intruder.pos.update(room["rect"].center)
+    assert not play.room_cleared("classroom_a")
+
+
+def test_the_locker_sits_in_its_room_and_the_hint_points_you_at_it(play):
+    """One per classroom, inside it, and reachable — a locker outside the room
+    or inside a wall would make its book undeliverable."""
+    assert set(play.lockers) == set(play.classrooms)
+    for rid, locker in play.lockers.items():
+        room = play.classrooms[rid]
+        assert room["rect"].contains(locker.rect), f"{rid}'s locker is outside it"
+        assert locker.color == room["color"]
+    room = _room(play, "classroom_a")
+    play.monsters.clear()
+    play.inventory.add("book", room["color"])
+    play.player.pos.update(room["rect"].center)      # in the room, off the locker
+    assert play._compute_hint() == "Put the book in the locker"
+
+
+def test_a_delivered_locker_shows_it(play, step, surface):
+    room = _stand_in(play, "classroom_a")
+    play.monsters.clear()
+    play.inventory.add("book", room["color"])
+    step(play, 1, inp=_press(interact=True))
+    assert play.lockers["classroom_a"].filled
+    step(play, 3, surface=surface)
+
+
 def test_collecting_a_potion_only_works_when_hurt(play):
     potion = next(p for p in play.pickups if p.item_type == "health")
     play.player.pos.update(potion.pos)
@@ -142,12 +235,65 @@ def test_collecting_a_potion_only_works_when_hurt(play):
 
 
 def test_a_full_inventory_leaves_items_on_the_floor(play):
-    key = next(p for p in play.pickups if p.item_type == "key")
+    book = Pickup(play.player.pos.x, play.player.pos.y, "book", "red")
+    play.pickups.append(book)
     for _ in range(play.inventory.capacity):
         play.inventory.add("key")
+    play._collect_pickups()
+    assert book in play.pickups
+
+
+# ── keys are killed for, and dropped where the monster fell (§13) ─────────
+def test_killing_monsters_drops_the_keys_on_the_floor(play):
+    """⚠️ Three keys for three doors, and no more: a fourth is dead weight.
+
+    They land on the ground rather than going into the pack — handing one over
+    silently meant a key you never saw, so the reward for a fight was a number
+    changing in a corner."""
+    assert not [p for p in play.pickups if p.item_type == "key"]
+    for m in list(play.monsters):
+        where = pygame.Vector2(m.pos)
+        play._on_monster_died(m)
+    keys = [p for p in play.pickups if p.item_type == "key"]
+    assert len(keys) == settings.KEYS_FROM_KILLS
+    assert play.keys_earned == settings.KEYS_FROM_KILLS
+    assert all(k.shining for k in keys), "a won key should announce itself"
+    assert play.inventory.count("key") == 0, "it must be picked up, not granted"
+
+
+def test_a_dropped_key_lands_where_the_monster_fell(play):
+    m = play.monsters[0]
+    where = pygame.Vector2(m.pos)
+    play._on_monster_died(m)
+    key = next(p for p in play.pickups if p.item_type == "key")
+    assert key.pos.distance_to(where) < 1
+
+
+def test_the_key_counter_moves_only_once_it_is_actually_picked_up(play):
+    """The quest counts `ITEM_COLLECTED`, which `_collect_pickups` emits."""
+    before = play.quests.get("find_keys")[0]
+    play._on_monster_died(play.monsters[0])
+    assert play.quests.get("find_keys")[0] == before, "counted before pickup"
+    key = next(p for p in play.pickups if p.item_type == "key")
     play.player.pos.update(key.pos)
     play._collect_pickups()
-    assert key in play.pickups
+    assert play.quests.get("find_keys")[0] == before + 1
+
+
+def test_the_duel_never_drops_a_key(game):
+    """⚠️ A key opens a classroom door and the arena *is* a locked classroom —
+    so a key dropped by one of Emri's summons let the player unlock the door and
+    walk out of the boss fight."""
+    from game.core.play_state import PlayState
+    d = PlayState(game, duel=True)
+    game.push(d)
+    d.emri.health = d.emri.max_health * 0.7
+    d._update_duel(settings.FIXED_DT)
+    for a in list(d._adds):
+        d._on_monster_died(a)
+    assert not [p for p in d.pickups if p.item_type == "key"]
+    assert d.inventory.count("key") == 0
+
 
 
 # ── combat ────────────────────────────────────────────────────────────────
@@ -165,19 +311,19 @@ def test_nothing_respawns_after_a_kill(play, step):
     assert play.monsters == [], "the roster is fixed — nothing comes back"
 
 
-def test_killing_a_guard_frees_its_book(play, step):
-    guard = next(m for m in play.monsters if m.guards)
-    book = next(p for p in play.pickups
-                if p.item_type == "book" and p.variant == guard.guards)
-    assert book.guarded
-    guard.health = 1
-    play.player.pos.update(guard.pos)
+def test_killing_a_carrier_in_the_room_completes_that_room(play, step):
+    """The §5 loop end to end: the fight produces the objective it gates."""
+    teacher = next(m for m in play.monsters if m.drops)
+    assert not [p for p in play.pickups if p.item_type == "book"]
+    teacher.health = 1
+    play.player.pos.update(teacher.pos)
     step(play, 1, inp=_press(attack=True))
-    assert not book.guarded
+    book = next(p for p in play.pickups if p.item_type == "book")
+    assert book.variant == teacher.drops and book.shining
 
 
 def test_a_warriors_reach_decides_what_it_can_hit(make_play):
-    for wid in ("elad", "roni"):
+    for wid in ("wallad", "roni"):
         p = make_play(wid, clear_monsters=True)
         reach = p.player.reach
         p.monsters = [Monster(p.player.pos.x + reach - 4, p.player.pos.y, hits=9)]
@@ -267,11 +413,16 @@ def test_difficulty_scales_the_damage_a_cast_deals(game):
 
 
 # ── the book-return payoff (§6) ───────────────────────────────────────────
-def test_returning_a_book_fires_sound_sparkles_glow_and_a_tint_pulse(play):
+def test_returning_a_book_counts_it_shakes_the_room_and_glows_the_hud(play):
+    """⚠️ Deliberately **no** particle burst and no room-colour flush — see
+    `_on_book_returned`. If a reward animation reappears here, this is the test
+    that was supposed to argue with it."""
     room = _stand_in(play)
+    before = play.books_home
     play.bus.emit(Events.BOOK_RETURNED, room_id=room["id"], color=room["color"])
-    assert play.effects.items and play.book_flash > 0
-    assert room["id"] in play.tint_pulses
+    assert play.books_home == before + 1
+    assert play.book_flash > 0
+    assert play.camera._shake > 0
 
 
 def test_the_payoff_expires_on_its_own(play, step, surface):
@@ -279,7 +430,7 @@ def test_the_payoff_expires_on_its_own(play, step, surface):
     play.monsters.clear()
     play.bus.emit(Events.BOOK_RETURNED, room_id=room["id"], color=room["color"])
     step(play, 180, surface=surface)
-    assert play.effects.items == [] and play.book_flash == 0 and not play.tint_pulses
+    assert play.book_flash == 0
 
 
 def test_a_book_with_no_colour_does_not_crash_the_payoff(play, step, surface):
@@ -295,9 +446,9 @@ def test_leaving_playstate_detaches_it_from_the_shared_bus(game):
     game.push(first)
     game.switch(PlayState(game))
     assert len(game.bus._subs[Events.BOOK_RETURNED]) == before + 2
-    assert first.effects.items == []
+    assert first.books_home == 0
     game.bus.emit(Events.BOOK_RETURNED, room_id="classroom_a", color="red")
-    assert first.effects.items == [], "the old state is still listening"
+    assert first.books_home == 0, "the old state is still listening"
 
 
 # ── Emri in context ───────────────────────────────────────────────────────
@@ -393,7 +544,7 @@ def test_charges_run_out_and_say_so(make_play, step, surface):
 
 
 def test_the_knight_has_no_power_to_press(make_play, step):
-    p = make_play("elad")
+    p = make_play("wallad")
     p.monsters = [Monster(p.player.pos.x + 20, p.player.pos.y, hits=5)]
     step(p, 1, inp=_press(power=True))
     assert p.zina is None and p.player.power_charges == 0
@@ -401,11 +552,11 @@ def test_the_knight_has_no_power_to_press(make_play, step):
 
 def test_the_chosen_warrior_drives_the_player(make_play):
     from game.entities import warriors
-    for wid in ("elad", "roni"):
+    for wid in ("wallad", "roni"):
         p = make_play(wid)
         w = warriors.get(wid)
         assert p.player.walk_speed == w["speed"]
-        assert set(p.player.frames) == {"idle", "walk", "attack", "hurt"}
+        assert {"idle", "walk", "attack", "hurt"} <= set(p.player.frames)
 
 
 # ── drawing ───────────────────────────────────────────────────────────────
@@ -424,8 +575,98 @@ def test_victory_is_declared_once_the_quest_completes(play, step):
     play.monsters.clear()
     for rid, room in play.classrooms.items():
         play.inventory.add("book", room["color"])
-        play.player.pos.update(room["rect"].center)
+        play.player.pos.update(play.lockers[rid].rect.center)
         step(play, 1, inp=_press(interact=True))
         if play.won:
             break
     assert play.won and isinstance(play.game.state_stack[-1], LevelCompleteState)
+
+
+# ── the web bites (§5) ────────────────────────────────────────────────────
+def test_being_webbed_drains_health_until_you_break_free(play, step):
+    """⚠️ A web used to be a pure pause: it held you still and did nothing, so
+    the right play was to ignore it and mash. Now being stuck costs something."""
+    play.monsters.clear()
+    play.player.take_web()
+    start = play.player.health
+    step(play, 60)
+    assert play.player.health < start, "the web did nothing"
+    caught = start - play.player.health
+    play.player.webbed = False
+    play.player.health = start
+    step(play, 60)
+    assert start - play.player.health < caught, "it drained after release too"
+
+
+def test_the_web_drain_does_not_spam_the_hurt_grunt(play, step):
+    """`take_damage` flinches and asks for a grunt, which is right for a blow
+    and wrong sixty times a second."""
+    play.monsters.clear()
+    play.player.take_web()
+    play.player.sound_request = None
+    step(play, 30)
+    assert play.player.sound_request is None
+    assert play.player.hurt_flash == 0
+
+
+def test_a_web_can_finish_a_dying_player(play, step):
+    play.monsters.clear()
+    play.player.health = 1.0
+    play.player.take_web()
+    step(play, 30)
+    assert play.lost
+
+
+# ── monsters are solid to the player (§10) ────────────────────────────────
+def test_the_player_cannot_walk_through_a_monster(play):
+    m = play.monsters[0]
+    play.player.pos.update(m.pos.x - 60, m.pos.y)
+    before = pygame.Vector2(play.player.pos)
+    for _ in range(90):
+        play.player.update(settings.FIXED_DT, _press(), collider=play.player_collider)
+        play.player.vel.update(settings.PLAYER_WALK, 0)
+        play.player.move_and_collide(settings.FIXED_DT, play.player_collider)
+    assert play.player.pos.x > before.x, "it never moved at all"
+    assert not play.player.hitbox.colliderect(m.hitbox), "walked into the monster"
+
+
+def test_a_monster_standing_on_the_player_is_pushed_apart(play, step):
+    """Monsters do not collide with the player when *they* move, so one can walk
+    onto a player who is holding still — and a player holding still never calls
+    `move_and_collide`, so nothing would resolve it.
+
+    ⚠️ The guarantee is *separation*, not a direction. The push goes along the
+    shallowest axis, which is the shortest way out; asserting the player escapes
+    to any particular side would be asserting an implementation detail."""
+    m = play.monsters[0]
+    play.player.pos.update(m.pos)
+    assert play.player.hitbox.colliderect(m.hitbox), "they should start overlapped"
+    step(play, 4)
+    assert not play.player.hitbox.colliderect(m.hitbox), "still inside it"
+
+
+def test_contact_does_not_switch_collision_off(play):
+    """⚠️ The bug this replaced: monsters already *touching* the player were
+    excluded from its collider so that an overlap could be escaped. Monsters
+    close on you constantly, so contact is the normal state — and while touching,
+    collision was simply off and the player walked straight through."""
+    m = play.monsters[0]
+    p = play.player
+    p.pos.update(m.pos.x - 40, m.pos.y)
+    m.pos.update(p.pos.x + 30, p.pos.y)
+    assert p.hitbox.colliderect(m.hitbox), "this test needs them touching"
+    for _ in range(200):
+        p.vel.update(settings.PLAYER_WALK, 0)
+        p.move_and_collide(settings.FIXED_DT, play.player_collider)
+        play._separate_from_monsters()
+    assert p.pos.x < m.pos.x, "walked straight through it"
+    assert not p.hitbox.colliderect(m.hitbox)
+
+
+# ── projectiles clear the furniture (§11) ─────────────────────────────────
+def test_a_thrown_book_flies_over_a_desk_but_not_through_a_wall(play):
+    desk = play.decor_solids[0]
+    assert play.solid_rects(desk), "the desk is not solid at all"
+    assert not play.wall_rects(desk), "a desk must not stop a projectile"
+    wall = play.tilemap.solid_rects(pygame.Rect(0, 0, 4000, 4000))[0]
+    assert play.wall_rects(wall), "a wall must stop one"

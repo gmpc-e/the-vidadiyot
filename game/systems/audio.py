@@ -1,9 +1,26 @@
-"""AudioSystem: a procedurally synthesized, funky chiptune loop.
+"""AudioSystem: streamed music tracks, with synthesized fallbacks for everything.
 
-We synthesize the music instead of shipping a .mid because reliable MIDI playback
-needs a soundfont that isn't guaranteed on the target machine. This builds a
-raw 16-bit mono buffer (square-wave bass + vibrato lead + kick/hi-hat) and loops
-it — eerie and funky, fitting the abandoned-school vibe. Toggle with M.
+Two layers, and they work differently on purpose.
+
+**Music is streamed** through `pygame.mixer.music` from `assets/music/<track>.ogg`
+— one track at a time, changed by whichever state is on top. Streaming matters:
+the delivered menu track is 3.5 minutes, which is 40MB as a WAV and would sit in
+RAM as a `Sound`. Each state asks for its track by name and the system does
+nothing if it is already playing, so pushing a pause screen doesn't restart the
+music.
+
+**Sound effects are synthesized** (`SYNTHS`) unless a real file is dropped at
+`assets/sfx/<name>.(wav|ogg)`, which overrides the synth with no code change.
+
+Both layers fall back rather than fail: no track file plays the built-in
+chiptune loop, no audio device at all disables the system quietly. A missing
+sound must never take the game down mid-fight.
+
+⚠️ **The synths generate mono at 22050Hz and the mixer runs stereo at 44100**,
+because real music through a mono 22kHz mixer sounds like a phone call. Raw
+buffers handed to `pygame.mixer.Sound` are interpreted in the *mixer's* format,
+so `_fit_mixer()` converts them on the way in. Change `SR` or `MIXER_SR` and
+that conversion is what has to keep up.
 """
 import array
 import math
@@ -14,10 +31,14 @@ import pygame
 
 from game.core.assets import ASSETS
 
-SR = 22050
+SR = 22050                  # the synths' native rate
+MIXER_SR = 44100            # what the device runs at, for the streamed music
+MIXER_CHANNELS = 2
 BPM = 110
-MUSIC_VOLUME = 0.4
+MUSIC_VOLUME = 0.35         # music sits *under* the effects, never over them
 SFX_DIR = os.path.join(ASSETS, "sfx")
+MUSIC_DIR = os.path.join(ASSETS, "music")
+MUSIC_EXTS = (".ogg", ".wav")
 
 # one-bar patterns, sixteenth-note steps. 0 = rest. Deliberately syncopated and
 # a little dissonant so it reads as "weird funky" rather than clean chiptune.
@@ -198,11 +219,42 @@ def _synth_loop():
     return buf.tobytes()
 
 
+def _fit_mixer(pcm):
+    """Convert a mono `SR` buffer to the mixer's rate and channel count.
+
+    The synths predate the mixer being stereo at 44100 and there is no reason to
+    rewrite six of them: an integer rate ratio means each sample is simply held
+    for `MIXER_SR // SR` output frames, and written once per channel.
+    """
+    ratio = MIXER_SR // SR
+    if ratio == 1 and MIXER_CHANNELS == 1:
+        return pcm
+    mono = array.array("h")
+    mono.frombytes(pcm)
+    out = array.array("h")
+    for sample in mono:
+        for _ in range(ratio):
+            for _ in range(MIXER_CHANNELS):
+                out.append(sample)
+    return out.tobytes()
+
+
+def music_path(track):
+    """Path to a music file for `track`, or None if it isn't installed."""
+    for ext in MUSIC_EXTS:
+        path = os.path.join(MUSIC_DIR, track + ext)
+        if os.path.exists(path):
+            return path
+    return None
+
+
 # ── the sound registry ────────────────────────────────────────────────────
 # name -> synth fallback. Every entry can be overridden at any time by dropping
 # a real file at assets/sfx/<name>.(wav|ogg) — no code change. Characters refer
 # to sounds by name ("zina_bark"), so adding a voice to a new character is one
 # synth plus one line here.
+# Placeholders only. A sound needs an entry here *only* if it must be audible
+# before its real file exists; anything delivered as a file plays without one.
 SYNTHS = {
     "monster":   _synth_growl,
     "success":   _synth_success,
@@ -216,26 +268,75 @@ class AudioSystem:
     def __init__(self):
         self.available = False
         self.enabled = True
-        self._sound = None
+        self._sound = None          # the synthesized fallback loop, if in use
+        self._track = None          # name of the track currently playing
         self._fanfare = None
-        self._sfx = {}          # name -> Sound cache
+        self._sfx = {}              # name -> Sound cache
         try:
             pygame.mixer.quit()
-            pygame.mixer.init(frequency=SR, size=-16, channels=1)
+            pygame.mixer.init(frequency=MIXER_SR, size=-16,
+                              channels=MIXER_CHANNELS)
             self.available = True
         except pygame.error:
             self.available = False
 
-    def start_music(self):
-        """Synthesize (once) and start the looping track."""
-        if not self.available or self._sound is not None:
+    # ── music ────────────────────────────────────────────────────────────--
+    def play_music(self, track):
+        """Stream `track` on a loop, or keep the synth loop if it isn't there.
+
+        Called by whichever state owns the screen. Asking for the track that is
+        already playing is a no-op, so pushing pause or the leaderboard over the
+        level does not restart the music.
+        """
+        if not self.available or track == self._track:
+            return
+        path = music_path(track)
+        if path is None:
+            # Not installed yet. Only fall back to the chiptune if nothing is
+            # playing at all — otherwise asking for a track that hasn't been
+            # written yet would drop the synth loop *on top* of the one that is
+            # already streaming. States can request tracks that don't exist.
+            if self._track is None and self._sound is None:
+                self._start_synth_loop()
             return
         try:
-            self._sound = pygame.mixer.Sound(buffer=_synth_loop())
-            self._sound.set_volume(MUSIC_VOLUME)
+            self._stop_synth_loop()
+            pygame.mixer.music.load(path)
+            pygame.mixer.music.set_volume(MUSIC_VOLUME if self.enabled else 0.0)
+            pygame.mixer.music.play(loops=-1)
+            self._track = track
+        except pygame.error:
+            self._start_synth_loop()
+
+    def _start_synth_loop(self):
+        """The built-in chiptune, for a checkout with no music files."""
+        if self._sound is not None:
+            return
+        try:
+            self._sound = pygame.mixer.Sound(buffer=_fit_mixer(_synth_loop()))
+            self._sound.set_volume(MUSIC_VOLUME if self.enabled else 0.0)
             self._sound.play(loops=-1)
+            self._track = None
         except pygame.error:
             self.available = False
+
+    def _stop_synth_loop(self):
+        if self._sound is not None:
+            self._sound.stop()
+            self._sound = None
+
+    def stop_music(self):
+        self._stop_synth_loop()
+        if self.available:
+            try:
+                pygame.mixer.music.stop()
+            except pygame.error:
+                pass
+        self._track = None
+
+    def start_music(self):
+        """Backwards-compatible entry point: start whatever the menu plays."""
+        self.play_music("menu")
 
     def play_fanfare(self):
         """One-shot victory sting. Held on the instance so it isn't GC'd mid-play."""
@@ -243,22 +344,25 @@ class AudioSystem:
             return
         try:
             if self._fanfare is None:
-                self._fanfare = pygame.mixer.Sound(buffer=_synth_fanfare())
+                self._fanfare = pygame.mixer.Sound(buffer=_fit_mixer(_synth_fanfare()))
             self._fanfare.set_volume(0.7 if self.enabled else 0.0)
             self._fanfare.play()
         except pygame.error:
             pass
 
-    def _get_sfx(self, name, synth_fallback):
-        """Return a Sound for `name`, preferring assets/sfx/<name>.(wav|ogg).
+    def _get_sfx(self, name):
+        """A Sound for `name`: the file if there is one, else the synth, else None.
 
-        Drop a real audio file there and it overrides the synth automatically —
-        the intended path for provided audio going forward.
+        Both halves are optional and that is the point. A *placeholder* sound has
+        a synth and no file, and gains one silently the moment `import_audio`
+        drops it in. A *new* sound arrives as a file with no synth ever written —
+        which the first version of this refused to play, because it looked the
+        name up in `SYNTHS` before looking on disk.
         """
         if name in self._sfx:
             return self._sfx[name]
         snd = None
-        for ext in (".wav", ".ogg"):
+        for ext in (".ogg", ".wav"):
             path = os.path.join(SFX_DIR, name + ext)
             if os.path.exists(path):
                 try:
@@ -266,25 +370,70 @@ class AudioSystem:
                 except pygame.error:
                     snd = None
                 break
-        if snd is None:
-            snd = pygame.mixer.Sound(buffer=synth_fallback())
+        if snd is None and name in SYNTHS:
+            snd = pygame.mixer.Sound(buffer=_fit_mixer(SYNTHS[name]()))
         self._sfx[name] = snd
         return snd
 
     def play(self, name, volume=1.0):
-        """Play a registered sound by name. Unknown names are ignored, not fatal —
-        a missing sound must never take the game down mid-fight."""
+        """Play a sound by name. A name with neither a file nor a synth behind it
+        is ignored, not fatal — call sites are allowed to be written before the
+        audio for them exists, and a missing sound must never take the game down
+        mid-fight."""
         if not self.available or not self.enabled:
             return
-        synth = SYNTHS.get(name)
-        if synth is None:
-            return
         try:
-            snd = self._get_sfx(name, synth)
+            snd = self._get_sfx(name)
+            if snd is None:
+                return
             snd.set_volume(volume)
             snd.play()
         except pygame.error:
             pass
+
+    def play_voiced(self, voice, event, default=None, volume=1.0):
+        """Play one character's own take on `event`, or fall back.
+
+        A **voice pack** is a set of sounds belonging to one character —
+        `teacher_f_spotplayer`, `teacher_f_throw`, `teacher_f_hit`,
+        `teacher_f_die`. They are not variants of the generic effects; they
+        replace them for the character that owns them, and `default` covers the
+        characters that have no pack (or the events a pack is still missing —
+        the female teacher has no `spotplayer` take yet and falls back to the
+        generic growl, which is fine and audibly so).
+
+        ⚠️ **A voice never overlaps itself.** The delivered `teacher_f_hit` is
+        1.59s and a sword swings every 0.36s, so a flurry of four hits would
+        stack four copies of the same yelp — the mistake `zina_bark` made at
+        1.85s against a 0.42s retrigger. Rather than tuning a cooldown per
+        sound, this asks pygame whether the clip is *still playing* and skips
+        it if so, which needs no numbers and stays right when a take is
+        re-recorded at a different length.
+        """
+        if not self.available or not self.enabled:
+            return
+        name = f"{voice}_{event}" if voice else None
+        snd = self._get_sfx(name) if name else None
+        if snd is None:
+            if default:
+                self.play(default, volume)
+            return
+        try:
+            if snd.get_num_channels():        # this voice is mid-sentence
+                return
+            snd.set_volume(volume)
+            snd.play()
+        except pygame.error:
+            pass
+
+    def stop(self, name):
+        """Cut a sound short. Used when the screen that owns it goes away."""
+        snd = self._sfx.get(name)
+        if snd is not None:
+            try:
+                snd.fadeout(180)        # not stop(): an abrupt cut clicks
+            except pygame.error:
+                pass
 
     def play_success(self):
         """Book returned. Uses assets/sfx/success.* if present."""
@@ -295,7 +444,14 @@ class AudioSystem:
         self.play("monster")
 
     def toggle(self):
+        """M — mute/unmute. Silences the streamed track and the synth loop alike."""
         self.enabled = not self.enabled
+        level = MUSIC_VOLUME if self.enabled else 0.0
         if self._sound:
-            self._sound.set_volume(MUSIC_VOLUME if self.enabled else 0.0)
+            self._sound.set_volume(level)
+        if self.available:
+            try:
+                pygame.mixer.music.set_volume(level)
+            except pygame.error:
+                pass
         return self.enabled

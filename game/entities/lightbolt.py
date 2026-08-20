@@ -17,6 +17,8 @@ GLOW = (200, 130, 30)
 
 
 class LightBolt(Entity):
+    hit_sound = "fire_hit"      # shares the fire impact until a bolt one lands
+
     def __init__(self, x, y, direction, damage):
         s = settings.BOLT_SIZE
         super().__init__(x, y, s, s)

@@ -7,9 +7,23 @@ make the school stop looking like coloured rectangles.
 Use **§0 Style block** at the top of *every* request, then paste one sheet
 prompt under it. The style block is what keeps sheet 4 looking like sheet 1.
 
+> ⚠️ **This file is parsed, not just read.** `tools/art_request.py` sends these
+> prompts to the image API directly, taking the `## §N Title` heading as the
+> section id and **the blockquote under it as the prompt**. Two consequences for
+> anyone editing: a prompt written as a plain paragraph is silently *not sent*,
+> and a section holding two different requests will send only the first
+> blockquote under a heading that promises both. Unquoted paragraphs are notes to
+> us and are deliberately dropped — that is the right place for warnings like the
+> one in §1. One runnable request per §.
+
 **Phase 2 — animation** lives in `ART_PROMPTS_PHASE2.md`: walk cycles, attack
 swings, monster cast wind-ups, Emri materialising, projectile loops. §5 below is
 the seed it grew out of; the Phase 2 pack supersedes it for anything that moves.
+
+**⚠️ `tools/art_request.py` parses this file.** A section is a `## §N Title`
+heading and its prompt is the **blockquote** beneath it — prose outside the
+quote is treated as commentary for us and is never sent to the model. Keep new
+prompts inside `>` quotes, or the tool will cheerfully request nothing.
 
 ---
 
@@ -24,12 +38,33 @@ the seed it grew out of; the Phase 2 pack supersedes it for anything that moves.
 > **Palette:** desaturated cool greys, muted browns and deep blue-blacks for all
 > environment surfaces. Accent language, used sparingly: brass and warm gold for
 > metal, blood red and toxic slime green for damage and decay, deep purple for
-> cloth. Environment must stay **dark and low-contrast** — it is background, and
-> bright characters have to stand out against it.
+> cloth. Environment must stay **dark and low-contrast** — it is background.
+> **Characters, monsters, projectiles and pickups are the exception — they stay
+> bright and saturated**, because they have to stay legible against a dark floor
+> at 640×360.
 >
 > **Lighting:** flat, even, ambient. No strong directional light, no baked drop
 > shadows, no glow. Each object lit as if by dim overcast moonlight from directly
 > above.
+>
+> **Characters:** the cast is **not drawn at one set of proportions**, and a
+> sheet that restyles a character is unusable no matter how good it is — these
+> are animations of characters already in the game, so each one has to match the
+> art it will be intercut with, frame for frame.
+>
+> - **Monsters, teachers and the dog: chibi** — about three heads tall, large
+>   round head, big eyes, short stubby body, simplified oversized hands and feet.
+>   Adults among them are drawn this way too.
+> - **Roni, the warrior princess: stylised** — about four heads tall. A large
+>   head and big eyes, but a real body underneath, and her armour and cloak are
+>   painted with proper weight and detail.
+> - **Wallad, the knight: a realistically proportioned adult** — about six heads
+>   tall, a bearded man in heavy plate. **He is not a chibi character.** Do not
+>   give him a big round head or a child's body.
+>
+> Whichever it is, build the figure out of a few big shapes rather than fine
+> detail: at final size a face is a handful of pixels, so the silhouette of the
+> head, the hair and the gear is most of what the player will ever see.
 >
 > **Presentation:** every object isolated on a **pure black (#000000) background**.
 > No scene, no vignette, no floor beneath the objects, no gradient, no border, no
@@ -271,35 +306,197 @@ than as damage to this one.
 
 ---
 
-## §R4–R6 The props, at proper resolution
+## §R4–R6 The props — ✅ delivered
 
-The contact sheet answered priorities 3–5 of `ART_REQUESTS.md`. Re-request them
-in groups, with §R0 attached, at these minimum sheet sizes:
+Sent, and the sheet arrived as `phase-1-rework.png`. All of it is extracted by
+`tools/extract_props.py` and the classroom set is placed by `world/decor.py`.
+Kept here as the size record, since a re-paint of any one piece has to match it.
 
 | Sheet | Items | Final sizes | Minimum on the sheet |
 |---|---|---|---|
 | **R4a Classroom furniture** | student desk, chair, teacher's desk, bookshelf | 26×20, 12×12, 46×24, 40×26 | 104×80 … 184×104 |
 | **R4b Classroom wall** | blackboard, wall clock, poster ×3 | 156×46, 14×14, 18×22 | **blackboard ≥ 624×184** |
-| **R4c The locker** ⭐ | single locker, closed **and** standing open with a shelf | 22×32 each | ≥ 88×128 each |
 | **R5 Corridor** | locker bank, notice board, trophy case, mop bucket, ceiling light, radiator | 90×34, 48×30, 40×34, 18×18, 28×12, 30×14 | ≥ 360×136 for the bank |
 | **R6 Atmosphere** | cobweb corners ×3, window + moonlight, litter ×5 | 24×24, 48×40, 4×4 | ≥ 96×96, ≥ 192×160 |
 
-⭐ **R4c is the one to send first.** The locker is the book-return point
-(roadmap §5) — the destination the player fights their way to — so it is the
-only prop in this list that is a *game object* rather than scenery, and it needs
-two states:
+⚠️ The blackboard came back at **2.5×**, not the 4× asked for — it is the one
+prop in the game that is close to a 1:1 downscale. Everything else cleared 4×.
+
+⚠️ The sheet arrived with **painted captions above every item** for the third
+delivery running. `tools/extract_props.py` works around it by finding items in
+bands *below* the known caption rows rather than by locating the biggest shape,
+and asserts the column count per band so a merged crop fails loudly. It is a
+workaround, not a fix — see the note under §R7.
+
+---
+
+## §R7 Return locker, open state
+
+The one piece of §R4c that did not arrive. The locker was delivered **shut
+only**, so a filled locker is currently signalled by a page edge painted on its
+colour plate instead of a door standing open — which is a weaker read for the
+single most important beat in the level (roadmap §5, §6).
+
+Both views are asked for again together, because a shut locker painted in a
+separate pass from the open one will not line up with it.
 
 > Paint two views of the same battered school locker, seen from a slight
 > three-quarter angle from above, side by side with a wide black gutter, at
-> exactly the same size and angle: **(1) shut**, a tall narrow steel door with
-> vent slits near the top, a handle and a keyhole, the paint chipped;
-> **(2) the same locker standing open**, the door swung aside, a single shelf
-> inside and the interior in shadow.
+> **exactly the same size, angle and position within its half of the frame**:
+> (1) **shut** — a tall narrow steel door with vent slits near the top, a
+> handle, a keyhole and a slot near the top, the green paint chipped;
+> (2) **the same locker standing open** — the door swung aside on its hinges,
+> one shelf inside, the interior in shadow, and a single closed book lying on
+> the shelf.
 >
-> Leave a **flat, undecorated rectangular panel across the upper front of the
-> door** in both views — the game paints the classroom's colour there, and it is
-> how the player identifies which book belongs inside.
+> Leave a flat, undecorated rectangular panel across the upper front of the door
+> in both views. The game paints the classroom's colour there, and it is how the
+> player identifies which book belongs inside — so nothing may be drawn on it.
 >
-> Unlike the rest of the furniture, this one is a **destination, not background**:
-> keep it a shade brighter and higher-contrast than the walls around it so it
-> reads as somewhere to walk to from across a dark room.
+> Unlike the rest of the school furniture this one is a **destination, not
+> background**: keep it brighter and higher-contrast than the walls around it, so
+> it reads as somewhere to walk to from across a dark room.
+
+⚠️ **The captions problem is worth solving at the source.** Three sheets in a
+row have arrived with item names painted above each object, despite §0 and §R0
+both forbidding it in the same words. Restating the ban a fourth time is
+unlikely to work; `art_request.py`'s `check()` gate is the place to catch it,
+since a caption row is cheap to detect — it is a thin horizontal band of
+low-density content sitting directly above a tall dense one, which is exactly
+the shape `extract_props.py` already profiles to *find* the items.
+
+---
+
+## §R8 Teacher monster — female
+
+A new classroom-dwelling caster (roadmap §2.12). It takes over the *inside* of
+the classrooms; Little Terror moves out into the corridors, where a fire caster
+with a 250px range has room to kite.
+
+⚠️ **The roster is chibi, and until this sheet no prompt file said so.** Snir,
+Little Terror and Emri are big-headed cartoon children, roughly three heads
+tall. The first two deliveries of this sheet came back at realistic adult
+proportions — about seven heads — so at the 54px the game draws her at, she was
+a thin grey stick with a six-pixel head standing beside three characters that
+read instantly. The rule now lives in **§0**, not here, because it applies to
+every character sheet either pack will ever ask for.
+
+Three things about this sheet are set by the code, not by taste:
+
+- **The four poses are the existing monster convention.** Every delivered
+  monster sheet — Snir, Little Terror, Emri — carries MAIN / IDLE / WALK /
+  ATTACK, and the extractors cut IDLE for `sprites/<name>.png` and MAIN for
+  `sprites/<name>_menu.png`. Asking for the same four keeps one extractor
+  shape for every monster in the game.
+⚠️ **Both deliveries drew the ATTACK pose about a quarter smaller than the other
+three**, despite the "one common ground line, whole body visible in every one of
+the four" clause below — which was itself added after the *first* roll cropped it
+at the waist. So the instruction moved the failure rather than fixing it. The
+pose is extracted (`teacher_f_attack.png`) and cannot be used: at the sheet's own
+scale the teacher visibly shrinks every time it casts. Fix it in the prompt on
+the next roll, or add a per-pose scale correction to `extract_teacher.py`.
+
+- **The in-game sprite is 54 pixels tall.** Not 54 wide — height is what
+  `TARGET_H` normalises. Every readable thing about this character has to
+  survive that, which is why the silhouette instructions below are specific
+  and the facial ones are not.
+- **One teacher per sheet.** Eight poses cannot all clear §R0's four-times-final
+  floor on one 1536×1024 frame, and §R0 says split rather than shrink.
+
+> Paint **one character in four poses**, left to right in a single row, each
+> pose separated by a wide black gutter:
+> **(1) MAIN** — standing square to the viewer, arms at her sides, the clearest
+> full view of the design; **(2) IDLE** — the same character shifted slightly,
+> weight on one foot, head tilted, as if drifting in place; **(3) WALK** — a
+> mid-stride step, one leg forward, cardigan swinging; **(4) ATTACK** — both
+> arms raised, a dark book floating open above her upturned palms.
+>
+> **All four figures must be the same height as each other** — at least **640
+> pixels tall** — **standing on one common invisible ground line, with the whole
+> body from the top of her head to the soles of her shoes visible in every one
+> of the four.** No pose may be cropped, floated, tilted away from the viewer or
+> drawn smaller than the others. Four full-length figures in a row, like a
+> costume line-up. Reserve the room for the fourth pose before starting the
+> first.
+>
+> **The character:** a schoolteacher who has been in this building far too long.
+> Chibi proportions as §0 describes — a big round head on a small stooped body,
+> which for her means a *long* cardigan and skirt reaching almost to the floor,
+> so she still reads as the tall thin one of the pair. A buttoned cardigan over a
+> straight below-the-knee skirt, flat shoes, a limp scarf. Her clothes are the school's
+> own colours — chalk-grey, dusty charcoal, faded oatmeal — and they are creased,
+> untucked, powdered with chalk dust and grimed at the hems. Her grey hair is
+> pinned in a high bun that has half fallen out of itself. Her glasses are
+> **broken**: heavy dark frames sitting crooked, one lens spidered with cracks,
+> the other lens gone. She is greyed and hollow, with sunken eyes and a slack
+> jaw — **stiff and vacant, like a sleepwalker, not a corpse.**
+>
+> **No blood, no wounds, no exposed bone, no rot, no green skin, no reaching
+> claws.** The horror is that she is still trying to teach. Keep her in the
+> register of a haunted-house cartoon ghost — the audience is children.
+>
+> **Ignore the palette block's instruction to stay dark for this character.**
+> That rule is for walls and floors. She is a *character*, lit and painted like
+> one: pitch her overall brightness at about that of a lit face in a dim room,
+> clearly lighter than any wall behind her, with real light falling on the
+> cardigan, the scarf, her hands and her face. Muted colour, yes — but **not
+> dark**. If she would disappear against a near-black floor, she is wrong.
+>
+> **She must read at 54 pixels tall**, so build her out of a few large shapes:
+> a narrow vertical silhouette, the wide skirt hem as her base, the tall tilted
+> bun stacked on top of her big round head, and the broken glasses — drawn large,
+> as chibi eyewear is — as the single bright glint on her face. She is an **actor, not scenery** — keep her
+> lighter and higher in contrast than the dark, desaturated classroom behind
+> her, especially the pale chalk-dusted cardigan.
+>
+> In the **bottom-right corner** of the sheet, in its own black space, well
+> clear of the figures, paint **exactly one** extra item — no second version, no
+> variations: **her projectile**, a small hardback book flying open, pages
+> fanned, trailing ragged violet-black smoke and a few loose torn pages behind
+> it. Seen from the side, travelling left to right, about 200 pixels wide.
+
+---
+
+## §R9 Teacher monster — male
+
+The counterpart to §R8. Same sheet layout, same four poses, same rules.
+
+⚠️ **The pair must differ by silhouette, not by face.** At 54 pixels tall a
+face is about six pixels of it, so "one is a man, one is a woman" is invisible
+in game — whatever separates them has to be visible in outline alone. She is a
+tall narrow vertical with a wide hem; he is deliberately built as the opposite.
+Do not soften that contrast in the name of matching them.
+
+> Paint **one character in four poses**, left to right in a single row, each
+> pose separated by a wide black gutter and each at least **640 pixels tall**:
+> **(1) MAIN** — standing square to the viewer, arms at his sides, the clearest
+> full view of the design; **(2) IDLE** — the same character shifted slightly,
+> shoulders sagging, head lolling; **(3) WALK** — a heavy mid-stride step, one
+> leg forward, jacket swinging open; **(4) ATTACK** — both arms raised, a dark
+> book floating open above his upturned palms.
+>
+> **The character:** a schoolmaster who has been in this building far too long.
+> Chibi proportions as §0 describes, and for him that means going the other way
+> from §R8: a wide, heavy-shouldered body hunched forward from the neck, almost
+> as broad as it is tall, in a boxy ill-fitting three-piece suit — square jacket, waistcoat, trousers pooling over
+> his shoes. The suit is brown-grey and dust-caked, elbows worn shiny, one
+> pocket hanging half off, his tie yanked loose and flung over one shoulder,
+> his shirt untucked. He is balding, with a few long strands combed sideways
+> across his scalp. His glasses are **broken**: round wire frames bent out of
+> shape, one lens spidered with cracks, the other lens gone. He is greyed and
+> hollow, with sunken eyes and a slack jaw — **stiff and vacant, like a
+> sleepwalker, not a corpse.**
+>
+> **No blood, no wounds, no exposed bone, no rot, no green skin, no reaching
+> claws.** The horror is that he is still trying to teach. Keep him in the
+> register of a haunted-house cartoon ghost — the audience is children.
+>
+> **He must read at 54 pixels tall**, so build him out of a few large shapes:
+> a squat, broad, top-heavy silhouette, the square shoulders of the jacket as
+> his widest point, the bare domed scalp with its few combed strands, and the
+> broken glasses — drawn large, as chibi eyewear is — as the single bright glint
+> on his face. He is an
+> **actor, not scenery** — keep him lighter and higher in contrast than the
+> dark, desaturated classroom behind him, especially the pale shirt and collar.
+>
+> Do not paint a projectile on this sheet — his is the same flying book as §R8.

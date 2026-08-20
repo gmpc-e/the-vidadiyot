@@ -1,6 +1,6 @@
 """LevelCompleteState — the two-beat "LEVEL ONE" / "COMPLETED" celebration.
 
-Shown the moment the last book is home, before the name entry and leaderboard.
+Shown the moment the last book is home, between the level and the boss duel.
 The beat structure is the whole point: the level name lands first, holds for a
 second so it registers, and only then does COMPLETED slam in with the sting.
 Both banners arrive with a short overshoot-and-settle so they punch rather than
@@ -27,9 +27,14 @@ CAN_SKIP_AT = 1.9       # ignore the key that finished the level, then accept
 class LevelCompleteState(State):
     draw_below = True
 
-    def __init__(self, game, elapsed):
+    def __init__(self, game, elapsed, charges=None):
         super().__init__(game)
         self.elapsed = elapsed
+        # ⚠️ Carried through to the duel, not reset. Zina is *three bites a
+        # level*, and the duel is the end of the same level — refilling her here
+        # would mean the cheapest way to enter the boss fight at full strength
+        # was to not use her at all in the school.
+        self.charges = charges
 
     def enter(self):
         self.t = 0.0
@@ -48,13 +53,21 @@ class LevelCompleteState(State):
         if not self.done_played and self.t >= DONE_AT:
             self.done_played = True
             self.game.audio.play("level_done")
-        if self.t >= CAN_SKIP_AT and (inp.interact or inp.attack):
+        if self.t >= CAN_SKIP_AT and (inp.interact or inp.attack or inp.confirm):
             self._advance()
 
     def _advance(self):
-        from game.core.victory_state import VictoryState
+        # The sting is 7.2s and this screen can be skipped from 1.9s, so without
+        # this it plays on under the next screen and collides with whatever is
+        # there — two loud noises at once, neither landing.
+        self.game.audio.stop("level_done")
+        from game.core.play_state import PlayState
         self.game.pop()
-        self.game.push(VictoryState(self.game, self.elapsed))
+        # ⚠️ The level is not the end of the run any more: clearing it opens the
+        # duel (§9), and the **clock carries over** so the leaderboard still
+        # measures the whole thing rather than restarting at the boss.
+        self.game.switch(PlayState(self.game, duel=True, elapsed=self.elapsed,
+                                   charges=self.charges))
 
     # ── draw ─────────────────────────────────────────────────────────────--
     def draw(self, surface):

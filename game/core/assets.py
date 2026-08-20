@@ -60,6 +60,28 @@ class CrispFont:
         return getattr(self._font, name)
 
 
+_SHARED = {}
+
+
+def load(rel_path):
+    """Module-level cached image load, or None if the file isn't there.
+
+    `AssetManager` is the normal route, but drawing code deep in entities and UI
+    has no handle on one — passing an asset manager down to `Door.draw` just to
+    fetch one sprite is worse than a module cache. Missing returns None so every
+    caller can keep its procedural drawing as a fallback: the painted art lives
+    in ~/Downloads and is *regenerated* into `assets/`, so a checkout that has
+    never run the tools still has to render something.
+    """
+    if rel_path not in _SHARED:
+        path = os.path.join(ASSETS, rel_path)
+        try:
+            _SHARED[rel_path] = pygame.image.load(path).convert_alpha()
+        except (pygame.error, FileNotFoundError):
+            _SHARED[rel_path] = None
+    return _SHARED[rel_path]
+
+
 class AssetManager:
     def __init__(self):
         self._images = {}

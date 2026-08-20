@@ -103,7 +103,7 @@ class HUD:
     def _draw_power(self, surface, player):
         """Charges of the warrior's active power, as pips beside the stamina bar.
 
-        Only drawn for warriors that have one — Elad's row would be permanently
+        Only drawn for warriors that have one — Wallad's row would be permanently
         empty, which reads as a bug rather than as "he has no power".
         """
         if not player.power:

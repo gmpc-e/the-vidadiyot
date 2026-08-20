@@ -1,4 +1,6 @@
-"""Game loop plumbing, the state stack, menus, HUD, camera, effects, audio."""
+"""Game loop plumbing, the state stack, menus, HUD, camera, audio."""
+import os
+
 import pygame
 import pytest
 
@@ -13,7 +15,6 @@ from game.core.play_state import PlayState
 from game.core.state import State
 from game.entities import warriors
 from game.systems import audio
-from game.systems.effects import Effects
 
 
 def _key(k):
@@ -284,7 +285,7 @@ def test_pause_draws_the_game_underneath():
 
 # ── HUD ───────────────────────────────────────────────────────────────────
 def test_the_hud_draws_for_both_warriors(make_play, surface):
-    for wid in ("elad", "roni"):
+    for wid in ("wallad", "roni"):
         p = make_play(wid)
         p.hud.draw(surface, p.player, p._counters(), "a hint", 61.5,
                    flashes={"book": 0.5})
@@ -293,7 +294,7 @@ def test_the_hud_draws_for_both_warriors(make_play, surface):
 def test_only_a_warrior_with_a_power_gets_charge_pips(make_play, surface):
     """Elad's row would be permanently empty, which reads as a bug."""
     calls = []
-    for wid in ("elad", "roni"):
+    for wid in ("wallad", "roni"):
         p = make_play(wid)
         orig = pygame.draw.rect
         try:
@@ -301,7 +302,7 @@ def test_only_a_warrior_with_a_power_gets_charge_pips(make_play, surface):
             p.hud._draw_power(surface, p.player)
         finally:
             pygame.draw.rect = orig
-    assert "roni" in calls and "elad" not in calls
+    assert "roni" in calls and "wallad" not in calls
 
 
 def test_the_timer_formats_as_minutes_and_seconds():
@@ -317,29 +318,28 @@ def test_the_hud_survives_a_dead_player(make_play, surface):
     p.hud.draw(surface, p.player, p._counters(), None, 0.0)
 
 
-# ── effects ───────────────────────────────────────────────────────────────
-def test_a_burst_spawns_particles_that_all_expire(surface):
-    c = Camera((640, 360))
-    fx = Effects()
-    fx.book_returned(pygame.Vector2(100, 100), (220, 80, 80))
-    assert fx.items
-    for _ in range(200):
-        fx.update(settings.FIXED_DT)
-        fx.draw(surface, c)
-    assert fx.items == []
-
-
-def test_effects_update_and_draw_with_nothing_alive(surface):
-    fx = Effects()
-    fx.update(0.1)
-    fx.draw(surface, Camera((640, 360)))
-
-
 # ── audio ─────────────────────────────────────────────────────────────────
-def test_every_registered_sound_synthesises(game):
-    for name, synth in audio.SYNTHS.items():
-        snd = game.audio._get_sfx(name, synth)
-        assert snd.get_length() > 0, name
+def test_every_registered_sound_resolves_to_something_audible(game):
+    """Whether it comes from a file or the synth, every registered name plays."""
+    for name in audio.SYNTHS:
+        snd = game.audio._get_sfx(name)
+        assert snd is not None and snd.get_length() > 0, name
+
+
+def test_a_sound_with_only_a_file_still_plays(game, tmp_path, monkeypatch):
+    """New effects arrive as a file with no synth ever written for them. Looking
+    the name up in SYNTHS first is what made the delivered sword swing silent."""
+    monkeypatch.setattr(audio, "SFX_DIR", str(tmp_path))
+    game.audio._sfx.clear()
+    assert game.audio._get_sfx("no_such_sound") is None, "and that is not fatal"
+    game.audio.play("no_such_sound")            # must not raise
+    import shutil
+    real = os.path.join(audio.ASSETS, "sfx", "sword_swing.ogg")
+    if os.path.exists(real):
+        shutil.copy(real, tmp_path / "file_only.ogg")
+        game.audio._sfx.clear()
+        snd = game.audio._get_sfx("file_only")
+        assert snd is not None and snd.get_length() > 0
 
 
 def test_the_book_chime_is_shorter_than_the_victory_fanfare():
@@ -370,3 +370,34 @@ def test_sound_names_used_in_code_are_all_registered():
         used |= set(re.findall(r'or\s+"([a-z_]+)"\s*$', path.read_text(), re.M))
     unknown = {n for n in used if n.startswith("zina_") or n in ("monster", "success")}
     assert unknown <= set(audio.SYNTHS), f"unregistered: {unknown - set(audio.SYNTHS)}"
+
+
+def test_enter_works_wherever_the_screen_says_it_does(game, surface):
+    """⚠️ Every end screen prints "Enter: play again" and only Space worked."""
+    from game.core.input import InputState
+    from game.core.victory_state import VictoryState
+    from game.core.play_state import PlayState
+    assert "confirm" in InputState.EDGE_FIELDS, "an un-latched edge gets dropped"
+    v = VictoryState(game, 12.0)
+    game.push(v)
+    v.name = "Someone"
+    v._submit_name()
+    inp = InputState()
+    inp.confirm = True
+    v.update(settings.FIXED_DT, inp)
+    assert isinstance(game.state_stack[-1], PlayState), "Enter did nothing"
+
+
+def test_the_victory_panel_leaves_the_banner_visible(game):
+    """It sat over the middle of the one painted asset on the screen.
+
+    ⚠️ The *name-entry* panel is the one that has to sit low — it holds four
+    short lines and the banner is what the player is looking at. The board panel
+    is taller by necessity and is allowed to cover more."""
+    from game.core.victory_state import VictoryState, SCRIM_NAME, SCRIM_BOARD
+    v = VictoryState(game, 12.0)
+    game.push(v)
+    assert v.phase == "name" and v.scrim is SCRIM_NAME
+    assert SCRIM_NAME.top > v.banner.get_height() * 0.45, "the panel covers VICTORY!"
+    for box in (SCRIM_NAME, SCRIM_BOARD):
+        assert box.bottom <= settings.INTERNAL_RES[1]

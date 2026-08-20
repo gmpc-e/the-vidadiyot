@@ -55,7 +55,7 @@ def make_play(game):
     """Build a PlayState for a chosen warrior, entered and ready to step."""
     from game.core.play_state import PlayState
 
-    def _make(warrior="elad", clear_monsters=False):
+    def _make(warrior="wallad", clear_monsters=False):
         game.warrior = warrior
         ps = PlayState(game)
         game.push(ps)

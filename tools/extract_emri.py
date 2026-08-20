@@ -14,7 +14,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = "emre-monster.png"
 OUT = os.path.join(ROOT, "assets", "sprites", "emri.png")
 CROP = (690, 95, 225, 320)        # IDLE pose
-TARGET_H = 58                     # slightly taller than the other two: it's a boss
+TARGET_H = 74                    # ⚠️ was 58. Emri is the boss and was the
+                                 # same height as the monsters it summons,
+                                 # which reads as one of them. Its hitbox
+                                 # grew to match (settings.EMRI_SIZE)                     # slightly taller than the other two: it's a boss
 LUMA_CUT = 52                     # he is shadow: a fill would leave a floating head
 FEATHER = 20                      # dissolve the crop edge so the kept haze isn't a box
 GAMMA   = 1.35                    # a gentler lift than the knight: he should stay murky

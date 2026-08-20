@@ -16,9 +16,16 @@ GLOW = (120, 40, 190)
 
 
 class Fireball(Entity):
-    def __init__(self, x, y, direction, damage):
+    hit_sound = "fire_hit"
+    #: The burst drawn where it lands. ⚠️ Named per projectile, not shared: a
+    #: purple fire ring was being drawn for a thrown *book* as well, because the
+    #: impact sprite was a single PlayState-wide field.
+    impact_art = "fire_impact"
+
+    def __init__(self, x, y, direction, damage, sprite=None):
         s = settings.FIREBALL_SIZE
         super().__init__(x, y, s, s)
+        self.sprite = sprite
         d = pygame.Vector2(direction)
         self.vel = d.normalize() * settings.FIREBALL_SPEED if d.length() else pygame.Vector2()
         self.damage = damage
@@ -42,6 +49,14 @@ class Fireball(Entity):
 
     def draw(self, surface, camera):
         off = camera.offset
+        if self.sprite:
+            cx, cy = self.pos.x - off.x, self.pos.y - off.y
+            # painted flame has a direction; the drawn blob never did
+            angle = -math.degrees(math.atan2(self.vel.y, self.vel.x)) \
+                if self.vel.length_squared() else 0
+            img = pygame.transform.rotate(self.sprite, angle)
+            surface.blit(img, img.get_rect(center=(cx, cy)))
+            return
         # trail
         for i, (tx, ty) in enumerate(self._trail):
             r = 2 + i
